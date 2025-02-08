@@ -19,14 +19,16 @@ jobs:
 
       - name: Build Binary
         run: |
+          # Extract version from git tag (e.g. v1.2.3 -> 1.2.3)
+          VERSION=${GITHUB_REF#refs/tags/v}
           cargo build --release
-          mv target/release/bump bump-macos
+          mv target/release/bump "bump-macos-${VERSION}"
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bump-macos
-          path: bump-macos
+          name: "bump-macos-${VERSION}"
+          path: "bump-macos-${VERSION}"
 
   release:
     name: Publish GitHub Release
@@ -44,6 +46,8 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
+        env:
+          VERSION: ${GITHUB_REF#refs/tags/v}
         with:
-          files: release-assets/bump-macos/bump-macos
+          files: "release-assets/bump-macos-${VERSION}/bump-macos-${VERSION}"
           generate_release_notes: true
