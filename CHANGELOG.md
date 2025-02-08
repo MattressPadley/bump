@@ -1,6 +1,6 @@
 # Changelog
 
-# 0.2.1 (2025-02-08)
+# 0.2.2 (2025-02-08)
 
-- fix build task
+- more fix on build task
 
