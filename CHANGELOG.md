@@ -1,6 +1,7 @@
 # Changelog
 
-# 0.2.2 (2025-02-08)
+# 0.2.3 (2025-02-08)
 
-- more fix on build task
+- fix build name
+- build mac only
 
