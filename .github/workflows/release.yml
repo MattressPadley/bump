@@ -9,6 +9,8 @@ jobs:
   build:
     name: Build Binary
     runs-on: macos-latest
+    permissions:
+      contents: write  # Add permission to create releases
 
     steps:
       - name: Checkout Repository
@@ -19,10 +21,9 @@ jobs:
 
       - name: Build Binary
         run: |
-          # Extract version from git tag (e.g. v1.2.3 -> 1.2.3)
-          VERSION=${GITHUB_REF#refs/tags/v}
           cargo build --release
-          mv target/release/bump "bump-macos-${VERSION}"
+          # Use the full tag name including 'v' prefix
+          mv target/release/bump "bump-macos-${{ github.ref_name }}"
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
@@ -34,6 +35,8 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Add permission to create releases
 
     steps:
       - name: Checkout Repository
