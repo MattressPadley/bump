@@ -58,7 +58,7 @@ impl GitManager {
         Ok(())
     }
 
-    pub fn push_changes(&self, version: &str) -> Result<()> {
+    pub fn push_changes(&self) -> Result<()> {
         println!("Pushing changes to remote...");
         
         // Push both commit and tags

@@ -72,7 +72,7 @@ fn main() -> Result<()> {
     println!("Updated CHANGELOG.md");
 
     if cli.push || cli.release {
-        git_manager.push_changes(&version_string)?;
+        git_manager.push_changes()?;
         println!("Pushed changes and tag to remote");
     }
 
