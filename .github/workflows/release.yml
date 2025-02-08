@@ -27,8 +27,8 @@ jobs:
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: "bump-macos-${VERSION}"
-          path: "bump-macos-${VERSION}"
+          name: bump-macos-${{ github.ref_name }}
+          path: bump-macos-${{ github.ref_name }}
 
   release:
     name: Publish GitHub Release
@@ -46,8 +46,6 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
-        env:
-          VERSION: ${GITHUB_REF#refs/tags/v}
         with:
-          files: "release-assets/bump-macos-${VERSION}/bump-macos-${VERSION}"
+          files: release-assets/bump-macos-${{ github.ref_name }}/bump-macos-${{ github.ref_name }}
           generate_release_notes: true
