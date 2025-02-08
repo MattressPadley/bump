@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.4", features = ["derive"] }
+semver = "1.0"
+toml_edit = "0.21"
+anyhow = "1.0"
+git2 = "0.18"
+chrono = "0.4"
+regex = "1.10"
