@@ -1,0 +1,68 @@
+name: Release Bump
+
+on:
+  push:
+    tags:
+      - 'v*'  # Runs only when a tag like "v1.2.3" is pushed
+
+jobs:
+  build:
+    name: Build Binaries
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Binary (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cargo build --release
+          mv target/release/bump bump-${{ matrix.os }}
+
+      - name: Build Binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cargo build --release
+          mv target/release/bump.exe bump-windows.exe
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: bump-${{ matrix.os }}
+          path: |
+            bump-${{ matrix.os }}*
+            bump-windows.exe
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: release-assets/
+
+      - name: Rename Artifacts
+        run: |
+          mv release-assets/bump-ubuntu-latest/bump-ubuntu-latest bump-linux
+          mv release-assets/bump-macos-latest/bump-macos-latest bump-macos
+          mv release-assets/bump-windows-latest/bump-windows.exe bump-windows.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            bump-linux
+            bump-macos
+            bump-windows.exe
+          generate_release_notes: true
