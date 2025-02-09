@@ -11,6 +11,24 @@ A command-line tool for managing project versions, git tags, and changelogs usin
 - 🚀 GitHub release creation
 - 🔄 Automated git operations
 
+## Installation
+
+Install using Homebrew:
+```bash
+brew tap mattresspadley/tap
+brew install bump
+```
+
+Or, build from source:
+Clone this repository
+```bash
+git clone https://github.com/mattresspadley/bump.git
+```
+Install the binary:
+```bash
+cargo install --path .
+```
+
 
 ## How It Works
 
