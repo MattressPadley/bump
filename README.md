@@ -1,4 +1,4 @@
-# Version Manager
+# Bump
 
 A command-line tool for managing project versions, git tags, and changelogs using conventional commits.
 
