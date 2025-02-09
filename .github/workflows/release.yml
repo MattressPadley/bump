@@ -22,10 +22,8 @@ jobs:
       - name: Build Binary
         run: |
           cargo build --release
-          # Use the full tag name including 'v' prefix
-          mv target/release/bump "bump-macos-${{ github.ref_name }}"
-          # Create tarball
-          tar -czf "bump-macos-${{ github.ref_name }}.tar.gz" "bump-macos-${{ github.ref_name }}"
+          # Create tarball directly from the release binary
+          tar -czf "bump-macos-${{ github.ref_name }}.tar.gz" -C target/release bump
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
