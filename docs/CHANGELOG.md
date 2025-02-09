@@ -1,6 +1,6 @@
 # Changelog
 
-# 0.0.6 (2025-02-08)
+# 0.0.7 (2025-02-08)
 
-- fiw release builds more
+- update release to update brew tap
 
