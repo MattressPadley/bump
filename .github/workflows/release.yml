@@ -52,3 +52,50 @@ jobs:
         with:
           files: release-assets/bump-macos-${{ github.ref_name }}/bump-macos-${{ github.ref_name }}.tar.gz
           generate_release_notes: true
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Generate token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: mattresspadley
+
+      - name: Get version without 'v' prefix
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Checkout the tap repository
+        uses: actions/checkout@v4
+        with:
+          repository: mattresspadley/homebrew-tap
+          token: ${{ steps.generate_token.outputs.token }}
+
+      - name: Download the release binary
+        run: |
+          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-macos-${{ github.ref_name }}.tar.gz
+          echo "SHA256=$(shasum -a 256 bump-macos-${{ github.ref_name }}.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+        id: shasum
+
+      - name: Update the formula
+        run: |
+          sed -i "s|version \".*\"|version \"${{ steps.version.outputs.VERSION }}\"|" Formula/bump.rb
+          sed -i "s|url \".*\"|url \"https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-macos-${{ github.ref_name }}.tar.gz\"|" Formula/bump.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${{ steps.shasum.outputs.SHA256 }}\"|" Formula/bump.rb
+
+      - name: Commit and push the update
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/bump.rb
+          git commit -m "Update bump to version ${{ steps.version.outputs.VERSION }}"
+          git push
