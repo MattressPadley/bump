@@ -24,12 +24,14 @@ jobs:
           cargo build --release
           # Use the full tag name including 'v' prefix
           mv target/release/bump "bump-macos-${{ github.ref_name }}"
+          # Create tarball
+          tar -czf "bump-macos-${{ github.ref_name }}.tar.gz" "bump-macos-${{ github.ref_name }}"
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
           name: bump-macos-${{ github.ref_name }}
-          path: bump-macos-${{ github.ref_name }}
+          path: bump-macos-${{ github.ref_name }}.tar.gz
 
   release:
     name: Publish GitHub Release
@@ -50,5 +52,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-assets/bump-macos-${{ github.ref_name }}/bump-macos-${{ github.ref_name }}
+          files: release-assets/bump-macos-${{ github.ref_name }}/bump-macos-${{ github.ref_name }}.tar.gz
           generate_release_notes: true
