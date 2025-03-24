@@ -1,7 +1,7 @@
 # Changelog
 
-# 0.0.4 (2025-02-08)
+# 0.0.5 (2025-03-23)
 
-- compile error fixes
-- reduce binary size
+- test, pio, meson
+- add readme
 
