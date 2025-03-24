@@ -11,6 +11,10 @@ anyhow = "1.0"
 git2 = "0.18"
 chrono = "0.4"
 regex = "1.10"
+serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3.8"
 
 [profile.release]
 strip = true   # Removes debug symbols

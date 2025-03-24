@@ -5,7 +5,7 @@ A command-line tool for managing project versions, git tags, and changelogs usin
 ## Features
 
 - 🔢 Semantic version bumping (major, minor, patch)
-- 📦 Automatic version updates in Cargo.toml and pyproject.toml
+- 📦 Automatic version updates in Cargo.toml, pyproject.toml, CMakeLists.txt, and meson.build
 - 📝 Automatic changelog generation from conventional commits
 - 🏷️ Git tag creation and management
 - 🚀 GitHub release creation
@@ -17,6 +17,8 @@ A command-line tool for managing project versions, git tags, and changelogs usin
 1. **Version Detection**: Automatically detects and reads version information from:
    - Cargo.toml (Rust projects)
    - pyproject.toml (Python projects)
+   - CMakeLists.txt (C++ projects)
+   - meson.build (Meson projects)
 
 2. **Version Bumping**: Updates version numbers according to semantic versioning rules:
    - Major: Breaking changes (x.0.0)
