@@ -1,7 +1,11 @@
 # Changelog
 
-# 0.0.8 (2025-03-23)
+# 0.0.9 (2025-03-23)
 
-- fix verison
-- test, pio, meson
+- lock
+- 📚 Update README.md
+- 🔧 update readme
+- update release to update brew tap
+- fiw release builds more
+- update wf for tarball
 
