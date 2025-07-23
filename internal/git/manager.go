@@ -48,36 +48,22 @@ func (g *Manager) CreateTag(version string) error {
 }
 
 func (g *Manager) PushChanges() error {
-	if err := g.runGitCommand("push", "--follow-tags", "origin", "HEAD"); err != nil {
+	// Push commits first
+	if err := g.runGitCommand("push", "origin", "HEAD"); err != nil {
 		return fmt.Errorf("failed to push changes: %v", err)
 	}
 	return nil
 }
 
-func (g *Manager) CreateGitHubRelease(version, changelog string) error {
+func (g *Manager) PushTag(version string) error {
 	tagName := fmt.Sprintf("v%s", version)
-	title := fmt.Sprintf("Release %s", tagName)
-
-	args := []string{
-		"release",
-		"create",
-		tagName,
-		"--title", title,
-		"--notes", changelog,
-		"--verify-tag",
-		"--latest",
+	// Push tag separately to ensure workflow triggers
+	if err := g.runGitCommand("push", "origin", tagName); err != nil {
+		return fmt.Errorf("failed to push tag: %v", err)
 	}
-
-	cmd := exec.Command("gh", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create GitHub release: %v\nError: %s", err, stderr.String())
-	}
-
 	return nil
 }
+
 
 
 func (g *Manager) GetCommitsSince(fromVersion string) ([]Commit, error) {

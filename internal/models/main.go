@@ -134,7 +134,6 @@ type MainModel struct {
 	newVersion       string
 	showHelp         bool
 	claudeEnabled    bool
-	createRelease    bool
 }
 
 func NewMainModel() MainModel {
@@ -412,10 +411,6 @@ func (m MainModel) updateConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n", "N":
 		m.state = versionSelectView
 		return m, nil
-	case "r", "R":
-		// Toggle release creation
-		m.createRelease = !m.createRelease
-		return m, nil
 	case "left", "h":
 		m.state = changelogPreviewView
 		return m, nil
@@ -444,16 +439,13 @@ func (m MainModel) performVersionBump() tea.Msg {
 		return err
 	}
 
-	// Push changes to GitHub (required for release creation)
+	// Push changes and tag separately to GitHub (ensures workflow triggers)
 	if err := m.gitManager.PushChanges(); err != nil {
 		return err
 	}
 
-	// Create GitHub release if requested
-	if m.createRelease {
-		if err := m.gitManager.CreateGitHubRelease(m.newVersion, m.generatedChanges); err != nil {
-			return err
-		}
+	if err := m.gitManager.PushTag(m.newVersion); err != nil {
+		return err
 	}
 
 	return "success"
@@ -634,29 +626,21 @@ func (m MainModel) confirmationView() string {
 	actions = append(actions, "• Create git commit")
 	actions = append(actions, fmt.Sprintf("• Create git tag v%s", m.newVersion))
 	actions = append(actions, "• Push changes to GitHub")
-
-	if m.createRelease {
-		actions = append(actions, "• Create GitHub release")
-	}
+	actions = append(actions, "• Push tag to trigger release workflow")
 
 	summary := summaryStyle.Render(
 		fmt.Sprintf("This will:\n%s", strings.Join(actions, "\n")),
 	)
 
-	// Release option
-	releaseOptionStyle := lipgloss.NewStyle().
+	// Workflow info
+	workflowInfoStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#8aadf4"))
 
-	releaseStatus := "No"
-	if m.createRelease {
-		releaseStatus = "Yes"
-	}
-
-	releaseOption := releaseOptionStyle.Render(
-		fmt.Sprintf("Create GitHub Release: %s (press 'r' to toggle)", releaseStatus),
+	workflowInfo := workflowInfoStyle.Render(
+		"The GitHub Actions workflow will build binaries and update Homebrew tap",
 	)
 
-	footer := m.footerView("y: yes • n: no • r: toggle release • ←: back • q: quit")
+	footer := m.footerView("y: yes • n: no • ←: back • q: quit")
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -666,7 +650,7 @@ func (m MainModel) confirmationView() string {
 		"",
 		summary,
 		"",
-		releaseOption,
+		workflowInfo,
 		"",
 		footer,
 	)
@@ -714,10 +698,9 @@ func (m MainModel) resultsView() string {
 	results = append(results, fmt.Sprintf("Created tag v%s", m.newVersion))
 	results = append(results, "Updated changelog")
 	results = append(results, "Pushed changes to GitHub")
-
-	if m.createRelease {
-		results = append(results, "Created GitHub release")
-	}
+	results = append(results, "Pushed tag to trigger release workflow")
+	results = append(results, "")
+	results = append(results, "🚀 GitHub Actions will build binaries and update Homebrew tap")
 
 	results = append(results, "")
 	results = append(results, lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d")).Render("Press q to quit"))
