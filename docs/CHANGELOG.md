@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.1.3 (2025-07-22)
+
+## Features
+- Add support for .bump configuration files to manage versions across multiple files
+
+
 # 0.1.2 (2025-07-22)
 
 ## Features
