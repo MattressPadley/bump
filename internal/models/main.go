@@ -444,6 +444,11 @@ func (m MainModel) performVersionBump() tea.Msg {
 		return err
 	}
 
+	// Push changes to GitHub (required for release creation)
+	if err := m.gitManager.PushChanges(); err != nil {
+		return err
+	}
+
 	// Create GitHub release if requested
 	if m.createRelease {
 		if err := m.gitManager.CreateGitHubRelease(m.newVersion, m.generatedChanges); err != nil {
@@ -628,6 +633,7 @@ func (m MainModel) confirmationView() string {
 	actions = append(actions, "• Update changelog")
 	actions = append(actions, "• Create git commit")
 	actions = append(actions, fmt.Sprintf("• Create git tag v%s", m.newVersion))
+	actions = append(actions, "• Push changes to GitHub")
 
 	if m.createRelease {
 		actions = append(actions, "• Create GitHub release")
@@ -707,6 +713,7 @@ func (m MainModel) resultsView() string {
 	results = append(results, fmt.Sprintf("Version bumped to %s", m.newVersion))
 	results = append(results, fmt.Sprintf("Created tag v%s", m.newVersion))
 	results = append(results, "Updated changelog")
+	results = append(results, "Pushed changes to GitHub")
 
 	if m.createRelease {
 		results = append(results, "Created GitHub release")
