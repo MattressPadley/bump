@@ -93,7 +93,7 @@ func (b bumpType) String() string {
 	case bumpMajor:
 		return "Major"
 	case bumpMinor:
-		return "Minor" 
+		return "Minor"
 	case bumpPatch:
 		return "Patch"
 	default:
@@ -112,28 +112,29 @@ func (i versionItem) Description() string { return i.desc }
 func (i versionItem) FilterValue() string { return i.title }
 
 type MainModel struct {
-	state           sessionState
-	keys            keyMap
-	width           int
-	height          int
-	err             error
-	
+	state  sessionState
+	keys   keyMap
+	width  int
+	height int
+	err    error
+
 	// Managers
 	versionManager   *version.Manager
 	gitManager       *git.Manager
 	changelogManager *changelog.Manager
-	
+
 	// UI components
-	versionList    list.Model
-	changelogView  viewport.Model
-	spinner        spinner.Model
-	
+	versionList   list.Model
+	changelogView viewport.Model
+	spinner       spinner.Model
+
 	// State data
-	selectedBump    bumpType
+	selectedBump     bumpType
 	generatedChanges string
-	newVersion      string
-	showHelp        bool
-	claudeEnabled   bool
+	newVersion       string
+	showHelp         bool
+	claudeEnabled    bool
+	createRelease    bool
 }
 
 func NewMainModel() MainModel {
@@ -141,7 +142,7 @@ func NewMainModel() MainModel {
 	versionManager := version.NewManager()
 	gitManager := git.NewManager()
 	changelogManager := changelog.NewManager()
-	
+
 	// Create version selection items
 	items := []list.Item{
 		versionItem{
@@ -150,7 +151,7 @@ func NewMainModel() MainModel {
 			bump:  bumpMajor,
 		},
 		versionItem{
-			title: "Minor (0.x.0)", 
+			title: "Minor (0.x.0)",
 			desc:  "New features - backwards compatible functionality",
 			bump:  bumpMinor,
 		},
@@ -160,7 +161,7 @@ func NewMainModel() MainModel {
 			bump:  bumpPatch,
 		},
 	}
-	
+
 	// Create custom delegate with Catppuccin colors
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
@@ -193,17 +194,17 @@ func NewMainModel() MainModel {
 		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true).
 		Padding(0, 1)
-	
+
 	changelogView := viewport.New(0, 0)
-	
+
 	// Initialize spinner for Claude processing
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#8aadf4"))
-	
+
 	// Check if Claude is available
 	claudeAvailable := changelogManager.IsClaudeAvailable()
-	
+
 	return MainModel{
 		state:            welcomeView,
 		keys:             keys,
@@ -218,16 +219,15 @@ func NewMainModel() MainModel {
 }
 
 type initDoneMsg struct {
-	projectFiles []version.ProjectFile
+	projectFiles   []version.ProjectFile
 	currentVersion string
-	err error
+	err            error
 }
 
 type changelogGeneratedMsg struct {
 	changes string
 	err     error
 }
-
 
 func (m MainModel) Init() tea.Cmd {
 	return tea.Batch(
@@ -241,14 +241,14 @@ func (m MainModel) initProject() tea.Msg {
 	if err := m.gitManager.IsGitRepository(); err != nil {
 		return initDoneMsg{err: err}
 	}
-	
+
 	// Detect version files
 	if err := m.versionManager.DetectVersionFiles("."); err != nil {
 		return initDoneMsg{err: err}
 	}
-	
+
 	return initDoneMsg{
-		projectFiles: m.versionManager.ProjectFiles,
+		projectFiles:   m.versionManager.ProjectFiles,
 		currentVersion: m.versionManager.CurrentVersion.String(),
 	}
 }
@@ -261,42 +261,41 @@ func (m MainModel) generateChangelog() tea.Msg {
 	}
 }
 
-
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		
+
 		// Update sub-components
 		m.versionList.SetWidth(msg.Width - 4)
 		m.versionList.SetHeight(msg.Height - 8)
-		m.changelogView.Width = msg.Width - 12  // Account for border + padding
+		m.changelogView.Width = msg.Width - 12   // Account for border + padding
 		m.changelogView.Height = msg.Height - 12 // Account for header, version info, footer, spacing, and borders
-		
+
 		return m, nil
-		
+
 	case initDoneMsg:
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
 		}
-		
+
 		// Project initialized successfully, move to version selection
 		m.state = versionSelectView
 		return m, nil
-		
+
 	case changelogGeneratedMsg:
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
 		}
-		
+
 		m.generatedChanges = msg.changes
 		m.changelogView.SetContent(msg.changes)
 		m.state = changelogPreviewView
 		return m, nil
-		
+
 	case spinner.TickMsg:
 		if m.state == changelogGeneratingView {
 			var cmd tea.Cmd
@@ -304,13 +303,13 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, nil
-		
+
 	case string:
 		if msg == "success" {
 			m.state = resultsView
 			return m, nil
 		}
-		
+
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
@@ -319,7 +318,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showHelp = !m.showHelp
 			return m, nil
 		}
-		
+
 		// Handle state-specific key events
 		switch m.state {
 		case versionSelectView:
@@ -337,12 +336,12 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case resultsView:
 			return m, tea.Quit
 		}
-		
+
 	case error:
 		m.err = msg
 		return m, nil
 	}
-	
+
 	return m, nil
 }
 
@@ -351,7 +350,7 @@ func (m MainModel) updateVersionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Enter):
 		if selectedItem, ok := m.versionList.SelectedItem().(versionItem); ok {
 			m.selectedBump = selectedItem.bump
-			
+
 			// Calculate new version
 			switch m.selectedBump {
 			case bumpMajor:
@@ -361,7 +360,7 @@ func (m MainModel) updateVersionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case bumpPatch:
 				m.newVersion = m.versionManager.BumpPatch().String()
 			}
-			
+
 			// Show loading state if Claude is available, otherwise generate directly
 			if m.claudeEnabled {
 				m.state = changelogGeneratingView
@@ -378,13 +377,13 @@ func (m MainModel) updateVersionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.generatedChanges = changes
 				m.changelogView.SetContent(changes)
-				
+
 				m.state = changelogPreviewView
 				return m, nil
 			}
 		}
 	}
-	
+
 	var cmd tea.Cmd
 	m.versionList, cmd = m.versionList.Update(msg)
 	return m, cmd
@@ -399,7 +398,7 @@ func (m MainModel) updateChangelogPreview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = versionSelectView
 		return m, nil
 	}
-	
+
 	var cmd tea.Cmd
 	m.changelogView, cmd = m.changelogView.Update(msg)
 	return m, cmd
@@ -413,11 +412,15 @@ func (m MainModel) updateConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n", "N":
 		m.state = versionSelectView
 		return m, nil
+	case "r", "R":
+		// Toggle release creation
+		m.createRelease = !m.createRelease
+		return m, nil
 	case "left", "h":
 		m.state = changelogPreviewView
 		return m, nil
 	}
-	
+
 	return m, nil
 }
 
@@ -426,21 +429,28 @@ func (m MainModel) performVersionBump() tea.Msg {
 	if err := m.versionManager.UpdateAllVersions(m.newVersion); err != nil {
 		return err
 	}
-	
+
 	// Update changelog
 	if err := m.changelogManager.UpdateChangelog(m.newVersion, m.generatedChanges); err != nil {
 		return err
 	}
-	
+
 	// Git operations
 	if err := m.gitManager.CommitVersionBump(m.newVersion); err != nil {
 		return err
 	}
-	
+
 	if err := m.gitManager.CreateTag(m.newVersion); err != nil {
 		return err
 	}
-	
+
+	// Create GitHub release if requested
+	if m.createRelease {
+		if err := m.gitManager.CreateGitHubRelease(m.newVersion, m.generatedChanges); err != nil {
+			return err
+		}
+	}
+
 	return "success"
 }
 
@@ -473,7 +483,7 @@ func (m MainModel) errorView() string {
 	errorStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#ed8796")).
 		Bold(true)
-	
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		errorStyle.Render("❌ Error"),
@@ -482,7 +492,7 @@ func (m MainModel) errorView() string {
 		"",
 		lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d")).Render("Press q to quit"),
 	)
-	
+
 	return lipgloss.Place(
 		m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
@@ -492,29 +502,29 @@ func (m MainModel) errorView() string {
 
 func (m MainModel) changelogGeneratingView() string {
 	header := m.headerView("Generating Changelog")
-	
+
 	versionInfoStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true)
-	
+
 	versionInfo := versionInfoStyle.Render(
 		fmt.Sprintf("%s → %s", m.versionManager.CurrentVersion.String(), m.newVersion),
 	)
-	
+
 	// Animated spinner with text
 	spinnerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true)
-	
+
 	statusText := "Analyzing commits and generating changelog..."
 	if m.claudeEnabled {
 		statusText = "Using Claude to generate changelog..."
 	}
-	
+
 	spinner := spinnerStyle.Render(fmt.Sprintf("%s %s", m.spinner.View(), statusText))
-	
+
 	footer := m.footerView("q: quit")
-	
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -527,7 +537,7 @@ func (m MainModel) changelogGeneratingView() string {
 		"",
 		footer,
 	)
-	
+
 	return lipgloss.Place(
 		m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
@@ -537,18 +547,18 @@ func (m MainModel) changelogGeneratingView() string {
 
 func (m MainModel) versionSelectView() string {
 	header := m.headerView("Select Version Bump Type")
-	
+
 	currentVersionStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#6e738d"))
-	
+
 	currentVersion := currentVersionStyle.Render(
 		fmt.Sprintf("Current version: %s", m.versionManager.CurrentVersion.String()),
 	)
-	
+
 	projectFiles := m.projectFilesView()
-	
+
 	footer := m.footerView("↑/↓: navigate • enter: select • q: quit")
-	
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -561,32 +571,32 @@ func (m MainModel) versionSelectView() string {
 		"",
 		footer,
 	)
-	
+
 	return content
 }
 
 func (m MainModel) changelogPreviewView() string {
 	header := m.headerView("Changelog Preview")
-	
+
 	versionInfoStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true)
-	
+
 	versionInfo := versionInfoStyle.Render(
 		fmt.Sprintf("%s → %s", m.versionManager.CurrentVersion.String(), m.newVersion),
 	)
-	
+
 	changelogStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#494d64")).
 		Padding(1).
-		Width(m.changelogView.Width + 4). // Match viewport width + border/padding
+		Width(m.changelogView.Width + 4).  // Match viewport width + border/padding
 		Height(m.changelogView.Height + 2) // Match viewport height + padding
-	
+
 	changelog := changelogStyle.Render(m.changelogView.View())
-	
+
 	footer := m.footerView("↑/↓: scroll • enter: continue • ←: back • q: quit")
-	
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -597,29 +607,51 @@ func (m MainModel) changelogPreviewView() string {
 		"",
 		footer,
 	)
-	
+
 	return content
 }
 
 func (m MainModel) confirmationView() string {
 	header := m.headerView("Confirmation")
-	
+
 	questionStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#f5a97f")).
 		Bold(true)
-	
+
 	question := questionStyle.Render("Are you sure you want to proceed?")
-	
+
 	summaryStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#6e738d"))
-	
+
+	var actions []string
+	actions = append(actions, fmt.Sprintf("• Update version to %s", m.newVersion))
+	actions = append(actions, "• Update changelog")
+	actions = append(actions, "• Create git commit")
+	actions = append(actions, fmt.Sprintf("• Create git tag v%s", m.newVersion))
+
+	if m.createRelease {
+		actions = append(actions, "• Create GitHub release")
+	}
+
 	summary := summaryStyle.Render(
-		fmt.Sprintf("This will:\n• Update version to %s\n• Update changelog\n• Create git commit\n• Create git tag v%s",
-			m.newVersion, m.newVersion),
+		fmt.Sprintf("This will:\n%s", strings.Join(actions, "\n")),
 	)
-	
-	footer := m.footerView("y: yes • n: no • ←: back • q: quit")
-	
+
+	// Release option
+	releaseOptionStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#8aadf4"))
+
+	releaseStatus := "No"
+	if m.createRelease {
+		releaseStatus = "Yes"
+	}
+
+	releaseOption := releaseOptionStyle.Render(
+		fmt.Sprintf("Create GitHub Release: %s (press 'r' to toggle)", releaseStatus),
+	)
+
+	footer := m.footerView("y: yes • n: no • r: toggle release • ←: back • q: quit")
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
@@ -628,9 +660,11 @@ func (m MainModel) confirmationView() string {
 		"",
 		summary,
 		"",
+		releaseOption,
+		"",
 		footer,
 	)
-	
+
 	return lipgloss.Place(
 		m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
@@ -640,19 +674,19 @@ func (m MainModel) confirmationView() string {
 
 func (m MainModel) progressView() string {
 	header := m.headerView("Processing")
-	
+
 	spinnerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#8aadf4"))
-	
+
 	spinner := spinnerStyle.Render("⠋ Updating version files...")
-	
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		"",
 		spinner,
 	)
-	
+
 	return lipgloss.Place(
 		m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
@@ -664,18 +698,25 @@ func (m MainModel) resultsView() string {
 	successStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#a6da95")).
 		Bold(true)
-	
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		successStyle.Render("✅ Success!"),
-		"",
-		fmt.Sprintf("Version bumped to %s", m.newVersion),
-		fmt.Sprintf("Created tag v%s", m.newVersion),
-		"Updated changelog",
-		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d")).Render("Press q to quit"),
-	)
-	
+
+	var results []string
+	results = append(results, successStyle.Render("✅ Success!"))
+	results = append(results, "")
+
+	// This was a version bump
+	results = append(results, fmt.Sprintf("Version bumped to %s", m.newVersion))
+	results = append(results, fmt.Sprintf("Created tag v%s", m.newVersion))
+	results = append(results, "Updated changelog")
+
+	if m.createRelease {
+		results = append(results, "Created GitHub release")
+	}
+
+	results = append(results, "")
+	results = append(results, lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d")).Render("Press q to quit"))
+
+	content := lipgloss.JoinVertical(lipgloss.Left, results...)
+
 	return lipgloss.Place(
 		m.width, m.height,
 		lipgloss.Center, lipgloss.Center,
@@ -689,7 +730,7 @@ func (m MainModel) headerView(title string) string {
 		Bold(true).
 		Align(lipgloss.Center).
 		Width(m.width)
-	
+
 	return titleStyle.Render("🚀 Bump - " + title)
 }
 
@@ -698,7 +739,7 @@ func (m MainModel) footerView(help string) string {
 		Foreground(lipgloss.Color("#6e738d")).
 		Align(lipgloss.Center).
 		Width(m.width)
-	
+
 	return helpStyle.Render(help)
 }
 
@@ -708,13 +749,13 @@ func (m MainModel) projectFilesView() string {
 			Foreground(lipgloss.Color("#f5a97f")).
 			Render("⚠️ No project files detected")
 	}
-	
+
 	var files []string
 	for _, file := range m.versionManager.ProjectFiles {
 		fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d"))
 		files = append(files, fileStyle.Render(fmt.Sprintf("• %s", file.Description)))
 	}
-	
+
 	return strings.Join(files, "\n")
 }
 
@@ -723,11 +764,11 @@ func (m MainModel) welcomeView() string {
 		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true).
 		Render("🚀 Bump - Version Manager")
-	
+
 	subtitle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#6e738d")).
 		Render("Interactive semantic version management tool")
-	
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
@@ -738,7 +779,7 @@ func (m MainModel) welcomeView() string {
 		"",
 		"Press q to quit",
 	)
-	
+
 	return lipgloss.Place(
 		m.width, m.height,
 		lipgloss.Center, lipgloss.Center,

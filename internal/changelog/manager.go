@@ -90,7 +90,7 @@ func (c *Manager) formatCommitMessage(message string) string {
 		description := matches[3]
 
 		emoji := c.getEmojiForType(commitType)
-		
+
 		if scope != "" {
 			return fmt.Sprintf("- %s **%s:** %s", emoji, scope, description)
 		}
@@ -155,7 +155,7 @@ func (c *Manager) UpdateChangelog(version, changes string) error {
 			if newlinePos := strings.Index(existingContent[headerEnd:], "\n"); newlinePos >= 0 {
 				headerEnd += newlinePos + 1
 			}
-			
+
 			finalContent = existingContent[:headerEnd] + "\n" + newContent + existingContent[headerEnd:]
 		} else {
 			// No header found, prepend everything
@@ -178,12 +178,12 @@ func (c *Manager) PreviewChanges(fromVersion string) (string, error) {
 func (c *Manager) IsClaudeAvailable() bool {
 	// Try common Claude locations
 	claudePaths := []string{
-		"claude",                                    // In PATH
+		"claude", // In PATH
 		"/Users/" + os.Getenv("USER") + "/.claude/local/claude", // Common install location
-		"/opt/homebrew/bin/claude",                 // Homebrew
-		"/usr/local/bin/claude",                    // System install
+		"/opt/homebrew/bin/claude",                              // Homebrew
+		"/usr/local/bin/claude",                                 // System install
 	}
-	
+
 	for _, claudePath := range claudePaths {
 		cmd := exec.Command(claudePath, "--version")
 		cmd.Stdout = nil // Suppress output
@@ -192,7 +192,7 @@ func (c *Manager) IsClaudeAvailable() bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -216,7 +216,7 @@ func (c *Manager) formatCommitsForClaude(commits []git.Commit) string {
 
 func (c *Manager) buildSimplePrompt(commits []git.Commit) string {
 	commitMessages := c.formatCommitsForClaude(commits)
-	
+
 	return fmt.Sprintf(`Please format these git commit messages into a clean changelog:
 
 %s
@@ -246,12 +246,12 @@ Output format:
 func (c *Manager) getClaudePath() string {
 	// Try common Claude locations
 	claudePaths := []string{
-		"claude",                                    // In PATH
+		"claude", // In PATH
 		"/Users/" + os.Getenv("USER") + "/.claude/local/claude", // Common install location
-		"/opt/homebrew/bin/claude",                 // Homebrew
-		"/usr/local/bin/claude",                    // System install
+		"/opt/homebrew/bin/claude",                              // Homebrew
+		"/usr/local/bin/claude",                                 // System install
 	}
-	
+
 	for _, claudePath := range claudePaths {
 		cmd := exec.Command(claudePath, "--version")
 		cmd.Stdout = nil // Suppress output
@@ -260,7 +260,7 @@ func (c *Manager) getClaudePath() string {
 			return claudePath
 		}
 	}
-	
+
 	return "" // Not found
 }
 
@@ -275,7 +275,7 @@ func (c *Manager) generateWithClaude(commits []git.Commit) (string, error) {
 	}
 
 	prompt := c.buildSimplePrompt(commits)
-	
+
 	cmd := exec.Command(claudePath, "-p", prompt)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

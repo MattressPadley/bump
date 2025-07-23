@@ -39,7 +39,7 @@ func (g *Manager) CommitVersionBump(version string) error {
 func (g *Manager) CreateTag(version string) error {
 	tagName := fmt.Sprintf("v%s", version)
 	message := fmt.Sprintf("Release version %s", version)
-	
+
 	if err := g.runGitCommand("tag", "-a", tagName, "-m", message); err != nil {
 		return fmt.Errorf("failed to create tag: %v", err)
 	}
@@ -79,6 +79,7 @@ func (g *Manager) CreateGitHubRelease(version, changelog string) error {
 	return nil
 }
 
+
 func (g *Manager) GetCommitsSince(fromVersion string) ([]Commit, error) {
 	var args []string
 	if fromVersion != "" {
@@ -113,12 +114,12 @@ func (g *Manager) GetCommitsSince(fromVersion string) ([]Commit, error) {
 	}
 
 	lines := strings.Split(output, "\n")
-	
+
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		
+
 		parts := strings.SplitN(line, " ", 2)
 		if len(parts) < 2 {
 			continue
