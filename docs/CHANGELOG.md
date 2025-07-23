@@ -1,19 +1,5 @@
 # Changelog
 
-# 0.1.0 (2025-07-22)
-
-## Features
-- Added animated progress indicator for changelog generation
-- Applied Catppuccin Macchiato theme with blue accents
-- Rewrote application in Go with interactive terminal interface
-- Added support for Go projects
-
-## Bug Fixes
-- Fixed changelog viewport sizing to eliminate bottom gap
-- Fixed version display preservation during preview mode
-- Improved error handling for git operations in changelog generation
-
-
 # 0.0.10 (2025-03-23)
 
 
