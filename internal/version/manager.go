@@ -222,20 +222,17 @@ func (m *Manager) extractLibraryPropertiesVersion(content string) (*semver.Versi
 
 func (m *Manager) BumpMajor() *semver.Version {
 	newVersion := m.CurrentVersion.IncMajor()
-	m.CurrentVersion = &newVersion
-	return m.CurrentVersion
+	return &newVersion
 }
 
 func (m *Manager) BumpMinor() *semver.Version {
 	newVersion := m.CurrentVersion.IncMinor()
-	m.CurrentVersion = &newVersion
-	return m.CurrentVersion
+	return &newVersion
 }
 
 func (m *Manager) BumpPatch() *semver.Version {
 	newVersion := m.CurrentVersion.IncPatch()
-	m.CurrentVersion = &newVersion
-	return m.CurrentVersion
+	return &newVersion
 }
 
 func (m *Manager) UpdateAllVersions(newVersion string) error {
