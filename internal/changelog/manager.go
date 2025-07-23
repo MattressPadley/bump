@@ -1,8 +1,10 @@
 package changelog
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -32,9 +34,22 @@ func (c *Manager) GenerateChanges(fromVersion string) (string, error) {
 	commits, err := c.gitManager.GetCommitsSince(fromVersion)
 	if err != nil {
 		// If we can't get commits, return a default message
-		return "- 🔧 Minor updates and improvements", nil
+		return "- Minor updates and improvements", nil
 	}
 
+	// Try Claude first if available
+	if c.isClaudeAvailable() {
+		if changelog, err := c.generateWithClaude(commits); err == nil {
+			return changelog, nil
+		}
+		// If Claude fails, continue to fallback
+	}
+
+	// Fallback to existing regex-based system
+	return c.generateWithRegex(commits), nil
+}
+
+func (c *Manager) generateWithRegex(commits []git.Commit) string {
 	var changes []string
 	for _, commit := range commits {
 		// Skip version bump commits
@@ -50,10 +65,10 @@ func (c *Manager) GenerateChanges(fromVersion string) (string, error) {
 	}
 
 	if len(changes) == 0 {
-		return "- 🔧 Minor updates and improvements", nil
+		return "- Minor updates and improvements"
 	}
 
-	return strings.Join(changes, "\n"), nil
+	return strings.Join(changes, "\n")
 }
 
 func (c *Manager) formatCommitMessage(message string) string {
@@ -158,4 +173,123 @@ func (c *Manager) UpdateChangelog(version, changes string) error {
 
 func (c *Manager) PreviewChanges(fromVersion string) (string, error) {
 	return c.GenerateChanges(fromVersion)
+}
+
+func (c *Manager) IsClaudeAvailable() bool {
+	// Try common Claude locations
+	claudePaths := []string{
+		"claude",                                    // In PATH
+		"/Users/" + os.Getenv("USER") + "/.claude/local/claude", // Common install location
+		"/opt/homebrew/bin/claude",                 // Homebrew
+		"/usr/local/bin/claude",                    // System install
+	}
+	
+	for _, claudePath := range claudePaths {
+		cmd := exec.Command(claudePath, "--version")
+		cmd.Stdout = nil // Suppress output
+		cmd.Stderr = nil // Suppress errors
+		if err := cmd.Run(); err == nil {
+			return true
+		}
+	}
+	
+	return false
+}
+
+func (c *Manager) isClaudeAvailable() bool {
+	return c.IsClaudeAvailable()
+}
+
+func (c *Manager) formatCommitsForClaude(commits []git.Commit) string {
+	var commitText strings.Builder
+	for _, commit := range commits {
+		// Skip version bump commits
+		if strings.Contains(commit.Message, "bump version") ||
+			strings.Contains(commit.Message, "release") ||
+			strings.Contains(commit.Message, "chore(release)") {
+			continue
+		}
+		commitText.WriteString(fmt.Sprintf("- %s\n", commit.Message))
+	}
+	return commitText.String()
+}
+
+func (c *Manager) buildSimplePrompt(commits []git.Commit) string {
+	commitMessages := c.formatCommitsForClaude(commits)
+	
+	return fmt.Sprintf(`Please format these git commit messages into a clean changelog:
+
+%s
+
+Requirements:
+- Use markdown bullet points (-)
+- Group changes by category (Features, Bug Fixes, Improvements, Other)
+- Rewrite commit messages to be user-friendly
+- Focus on what changed, not technical details
+- Skip merge commits and version bumps
+
+Output format:
+## Features
+- New feature description
+
+## Bug Fixes  
+- Fixed issue description
+
+## Improvements
+- Enhancement description
+
+## Other
+- Misc changes
+`, commitMessages)
+}
+
+func (c *Manager) getClaudePath() string {
+	// Try common Claude locations
+	claudePaths := []string{
+		"claude",                                    // In PATH
+		"/Users/" + os.Getenv("USER") + "/.claude/local/claude", // Common install location
+		"/opt/homebrew/bin/claude",                 // Homebrew
+		"/usr/local/bin/claude",                    // System install
+	}
+	
+	for _, claudePath := range claudePaths {
+		cmd := exec.Command(claudePath, "--version")
+		cmd.Stdout = nil // Suppress output
+		cmd.Stderr = nil // Suppress errors
+		if err := cmd.Run(); err == nil {
+			return claudePath
+		}
+	}
+	
+	return "" // Not found
+}
+
+func (c *Manager) generateWithClaude(commits []git.Commit) (string, error) {
+	if len(commits) == 0 {
+		return "- Minor updates and improvements", nil
+	}
+
+	claudePath := c.getClaudePath()
+	if claudePath == "" {
+		return "", fmt.Errorf("claude not found")
+	}
+
+	prompt := c.buildSimplePrompt(commits)
+	
+	cmd := exec.Command(claudePath, "-p", prompt)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("claude command failed: %v", err)
+	}
+
+	output := strings.TrimSpace(stdout.String())
+	if output == "" {
+		return "", fmt.Errorf("claude returned empty output")
+	}
+
+	return output, nil
 }

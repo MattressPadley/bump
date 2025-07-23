@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -20,6 +21,7 @@ type sessionState int
 const (
 	welcomeView sessionState = iota
 	versionSelectView
+	changelogGeneratingView
 	changelogPreviewView
 	confirmationView
 	progressView
@@ -124,12 +126,14 @@ type MainModel struct {
 	// UI components
 	versionList    list.Model
 	changelogView  viewport.Model
+	spinner        spinner.Model
 	
 	// State data
 	selectedBump    bumpType
 	generatedChanges string
 	newVersion      string
 	showHelp        bool
+	claudeEnabled   bool
 }
 
 func NewMainModel() MainModel {
@@ -192,6 +196,14 @@ func NewMainModel() MainModel {
 	
 	changelogView := viewport.New(0, 0)
 	
+	// Initialize spinner for Claude processing
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#8aadf4"))
+	
+	// Check if Claude is available
+	claudeAvailable := changelogManager.IsClaudeAvailable()
+	
 	return MainModel{
 		state:            welcomeView,
 		keys:             keys,
@@ -200,6 +212,8 @@ func NewMainModel() MainModel {
 		changelogManager: changelogManager,
 		versionList:      versionList,
 		changelogView:    changelogView,
+		spinner:          s,
+		claudeEnabled:    claudeAvailable,
 	}
 }
 
@@ -208,6 +222,12 @@ type initDoneMsg struct {
 	currentVersion string
 	err error
 }
+
+type changelogGeneratedMsg struct {
+	changes string
+	err     error
+}
+
 
 func (m MainModel) Init() tea.Cmd {
 	return tea.Batch(
@@ -233,6 +253,15 @@ func (m MainModel) initProject() tea.Msg {
 	}
 }
 
+func (m MainModel) generateChangelog() tea.Msg {
+	changes, err := m.changelogManager.GenerateChanges(m.versionManager.CurrentVersion.String())
+	return changelogGeneratedMsg{
+		changes: changes,
+		err:     err,
+	}
+}
+
+
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -257,6 +286,25 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = versionSelectView
 		return m, nil
 		
+	case changelogGeneratedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		
+		m.generatedChanges = msg.changes
+		m.changelogView.SetContent(msg.changes)
+		m.state = changelogPreviewView
+		return m, nil
+		
+	case spinner.TickMsg:
+		if m.state == changelogGeneratingView {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+		
 	case string:
 		if msg == "success" {
 			m.state = resultsView
@@ -276,6 +324,12 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.state {
 		case versionSelectView:
 			return m.updateVersionSelect(msg)
+		case changelogGeneratingView:
+			// Only allow quit during changelog generation
+			if key.Matches(msg, m.keys.Quit) {
+				return m, tea.Quit
+			}
+			return m, nil
 		case changelogPreviewView:
 			return m.updateChangelogPreview(msg)
 		case confirmationView:
@@ -308,17 +362,26 @@ func (m MainModel) updateVersionSelect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.newVersion = m.versionManager.BumpPatch().String()
 			}
 			
-			// Generate changelog preview
-			changes, err := m.changelogManager.GenerateChanges(m.versionManager.CurrentVersion.String())
-			if err != nil {
-				m.err = err
+			// Show loading state if Claude is available, otherwise generate directly
+			if m.claudeEnabled {
+				m.state = changelogGeneratingView
+				return m, tea.Batch(
+					m.generateChangelog,
+					m.spinner.Tick,
+				)
+			} else {
+				// Generate changelog synchronously for non-Claude fallback
+				changes, err := m.changelogManager.GenerateChanges(m.versionManager.CurrentVersion.String())
+				if err != nil {
+					m.err = err
+					return m, nil
+				}
+				m.generatedChanges = changes
+				m.changelogView.SetContent(changes)
+				
+				m.state = changelogPreviewView
 				return m, nil
 			}
-			m.generatedChanges = changes
-			m.changelogView.SetContent(changes)
-			
-			m.state = changelogPreviewView
-			return m, nil
 		}
 	}
 	
@@ -391,6 +454,8 @@ func (m MainModel) View() string {
 		return m.welcomeView()
 	case versionSelectView:
 		return m.versionSelectView()
+	case changelogGeneratingView:
+		return m.changelogGeneratingView()
 	case changelogPreviewView:
 		return m.changelogPreviewView()
 	case confirmationView:
@@ -416,6 +481,51 @@ func (m MainModel) errorView() string {
 		m.err.Error(),
 		"",
 		lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d")).Render("Press q to quit"),
+	)
+	
+	return lipgloss.Place(
+		m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		content,
+	)
+}
+
+func (m MainModel) changelogGeneratingView() string {
+	header := m.headerView("Generating Changelog")
+	
+	versionInfoStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#8aadf4")).
+		Bold(true)
+	
+	versionInfo := versionInfoStyle.Render(
+		fmt.Sprintf("%s → %s", m.versionManager.CurrentVersion.String(), m.newVersion),
+	)
+	
+	// Animated spinner with text
+	spinnerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#8aadf4")).
+		Bold(true)
+	
+	statusText := "Analyzing commits and generating changelog..."
+	if m.claudeEnabled {
+		statusText = "Using Claude to generate changelog..."
+	}
+	
+	spinner := spinnerStyle.Render(fmt.Sprintf("%s %s", m.spinner.View(), statusText))
+	
+	footer := m.footerView("q: quit")
+	
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		"",
+		versionInfo,
+		"",
+		"",
+		spinner,
+		"",
+		"",
+		footer,
 	)
 	
 	return lipgloss.Place(
