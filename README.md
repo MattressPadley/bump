@@ -1,77 +1,111 @@
-# Bump
+# Bump TUI
 
-A command-line tool for managing project versions, git tags, and changelogs using conventional commits.
+An interactive Terminal User Interface (TUI) for managing project versions, git tags, and changelogs using conventional commits.
 
 ## Features
 
-- 🔢 Semantic version bumping (major, minor, patch)
-- 📦 Automatic version updates in Cargo.toml, pyproject.toml, CMakeLists.txt, and meson.build
-- 📝 Automatic changelog generation from conventional commits
-- 🏷️ Git tag creation and management
-- 🚀 GitHub release creation
-- 🔄 Automated git operations
+- 🖥️ **Interactive TUI** - Beautiful terminal interface with real-time feedback
+- 🔢 **Semantic version bumping** - Major, minor, and patch version increments
+- 📦 **Multi-project support** - Rust, Python, C++, and PlatformIO projects
+- 📝 **Automatic changelog generation** - From conventional commits with emoji categorization
+- 🏷️ **Git tag creation** - Automatic tagging with proper commit messages
+- 🚀 **GitHub release creation** - Integrated with `gh` CLI
+- ⚡ **Fast and responsive** - Built with Go for performance
 
 ## Installation
 
-Install using Homebrew:
+### Prerequisites
+
+- Go 1.21 or higher
+- Git
+- GitHub CLI (`gh`) for release creation
+- [Just](https://github.com/casey/just) for building (optional)
+
+### Build from source
+
 ```bash
-brew tap mattresspadley/tap
-brew install bump
+git clone https://github.com/yourusername/bump.git
+cd bump
+just build
+# or
+go build -o bump-tui .
 ```
 
-Or, build from source:
-Clone this repository
+## Usage
+
+Simply run the interactive TUI:
+
 ```bash
-git clone https://github.com/mattresspadley/bump.git
-```
-Install the binary:
-```bash
-cargo install --path .
+./build/bump-tui
 ```
 
+### Command-line options
 
-## How It Works
+```bash
+./build/bump-tui -help     # Show help
+./build/bump-tui -version  # Show version info
+```
 
-1. **Version Detection**: Automatically detects and reads version information from:
-   - Cargo.toml (Rust projects)
-   - pyproject.toml (Python projects)
-   - CMakeLists.txt (C++ projects)
-   - meson.build (Meson projects)
+### Environment variables
 
-2. **Version Bumping**: Updates version numbers according to semantic versioning rules:
-   - Major: Breaking changes (x.0.0)
-   - Minor: New features (0.x.0)
-   - Patch: Bug fixes (0.0.x)
+```bash
+DEBUG=1 ./build/bump-tui   # Enable debug logging
+```
 
-3. **Changelog Generation**: 
-   - Automatically generates changelog entries from git commits
-   - Uses conventional commit format for smart categorization
-   - Updates CHANGELOG.md in the docs directory
-   - Adds emojis for better readability
+## Supported Project Types
 
-4. **Git Integration**:
-   - Creates version bump commits
-   - Creates git tags
-   - Optionally pushes changes to remote
-   - Creates GitHub releases (with --release flag)
+- **Go** - `go.mod` (uses git tags for versioning)
+- **Rust** - `Cargo.toml`
+- **Python** - `pyproject.toml` (Poetry)
+- **C++** - `CMakeLists.txt`
+- **PlatformIO** - `platformio.ini`, `library.json`, `library.properties`
+
+## TUI Flow
+
+1. **Welcome Screen** - Project detection and initialization
+2. **Version Selection** - Choose major, minor, or patch bump
+3. **Changelog Preview** - Review generated changes from commits
+4. **Confirmation** - Final review before applying changes
+5. **Progress** - Real-time feedback during operations
+6. **Results** - Success summary
+
+## Keyboard Navigation
+
+- `↑/↓` or `j/k` - Navigate lists
+- `←/→` or `h/l` - Navigate between screens
+- `Enter` - Select/confirm
+- `q` or `Ctrl+C` - Quit
 
 ## Conventional Commits
 
-The changelog generator recognizes the following conventional commit types:
+The changelog generator recognizes these commit types:
 
-- ✨ feat: New features
-- 🐛 fix: Bug fixes
-- 📚 docs: Documentation changes
-- 💎 style: Code style changes
-- ♻️ refactor: Code refactoring
-- ⚡️ perf: Performance improvements
-- ✅ test: Test updates
-- 📦 build: Build system changes
-- 👷 ci: CI configuration changes
-- 🔧 chore: General maintenance
+- ✨ `feat:` - New features
+- 🐛 `fix:` - Bug fixes
+- 📚 `docs:` - Documentation changes
+- 💎 `style:` - Code style changes
+- ♻️ `refactor:` - Code refactoring
+- ⚡️ `perf:` - Performance improvements
+- ✅ `test:` - Test updates
+- 📦 `build:` - Build system changes
+- 👷 `ci:` - CI configuration changes
+- 🔧 `chore:` - General maintenance
+
+## Development
+
+### Building
+
+```bash
+just build        # Build binary
+just run          # Run with build info
+just dev          # Run with debug logging
+just test         # Run tests
+just clean        # Clean build artifacts
+just build-all    # Build for multiple platforms
+```
 
 ## Requirements
 
-- Git
-- GitHub CLI (gh) for release creation
-
+- Git repository (must be run from within a git repo)
+- At least one supported project file
+- GitHub CLI (`gh`) configured for release creation
