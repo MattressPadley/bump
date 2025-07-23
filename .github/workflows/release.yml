@@ -1,4 +1,4 @@
-name: Release Bump
+name: Release Bump TUI
 
 on:
   push:
@@ -7,40 +7,69 @@ on:
 
 jobs:
   build:
-    name: Build Binary
-    runs-on: macos-latest
+    name: Build Binaries
+    runs-on: ubuntu-latest
     permissions:
-      contents: write  # Add permission to create releases
+      contents: write
+    
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            extension: ""
+          - os: darwin
+            arch: amd64
+            extension: ""
+          - os: darwin
+            arch: arm64
+            extension: ""
+          - os: windows
+            arch: amd64
+            extension: ".exe"
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install Just
+        uses: extractions/setup-just@v1
 
       - name: Build Binary
         run: |
-          cargo build --release
-          # Create tarball directly from the release binary
-          tar -czf "bump-macos-${{ github.ref_name }}.tar.gz" -C target/release bump
+          VERSION=${GITHUB_REF_NAME#v}
+          COMMIT=$(git rev-parse --short HEAD)
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          LDFLAGS="-X main.version=$VERSION -X main.commit=$COMMIT -X main.date=$DATE"
+          
+          mkdir -p build
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "$LDFLAGS" -o build/bump-tui-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.extension }} .
+          
+          # Create tarball
+          cd build
+          tar -czf "bump-tui-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" bump-tui-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.extension }}
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bump-macos-${{ github.ref_name }}
-          path: bump-macos-${{ github.ref_name }}.tar.gz
+          name: bump-tui-${{ matrix.os }}-${{ matrix.arch }}
+          path: build/bump-tui-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
 
   release:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Add permission to create releases
+      contents: write
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download Build Artifacts
         uses: actions/download-artifact@v4
@@ -50,7 +79,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-assets/bump-macos-${{ github.ref_name }}/bump-macos-${{ github.ref_name }}.tar.gz
+          files: |
+            release-assets/bump-tui-linux-amd64/bump-tui-linux-amd64.tar.gz
+            release-assets/bump-tui-darwin-amd64/bump-tui-darwin-amd64.tar.gz
+            release-assets/bump-tui-darwin-arm64/bump-tui-darwin-arm64.tar.gz
+            release-assets/bump-tui-windows-amd64/bump-tui-windows-amd64.tar.gz
           generate_release_notes: true
 
   update-homebrew:
@@ -80,22 +113,53 @@ jobs:
           repository: mattresspadley/homebrew-tap
           token: ${{ steps.generate_token.outputs.token }}
 
-      - name: Download the release binary
+      - name: Download release binaries and get checksums
         run: |
-          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-macos-${{ github.ref_name }}.tar.gz
-          echo "SHA256=$(shasum -a 256 bump-macos-${{ github.ref_name }}.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
-        id: shasum
+          # Download macOS Intel binary for Homebrew (most common)
+          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-amd64.tar.gz
+          echo "SHA256_AMD64=$(shasum -a 256 bump-tui-darwin-amd64.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+          
+          # Download macOS ARM binary for Apple Silicon
+          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-arm64.tar.gz
+          echo "SHA256_ARM64=$(shasum -a 256 bump-tui-darwin-arm64.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+        id: checksums
 
       - name: Update the formula
         run: |
-          sed -i "s|version \".*\"|version \"${{ steps.version.outputs.VERSION }}\"|" Formula/bump.rb
-          sed -i "s|url \".*\"|url \"https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-macos-${{ github.ref_name }}.tar.gz\"|" Formula/bump.rb
-          sed -i "s|sha256 \".*\"|sha256 \"${{ steps.shasum.outputs.SHA256 }}\"|" Formula/bump.rb
+          # Update the formula to support both Intel and Apple Silicon
+          cat > Formula/bump.rb << 'EOF'
+          class Bump < Formula
+            desc "Interactive TUI for semantic versioning and changelog generation"
+            homepage "https://github.com/MattressPadley/bump"
+            version "${{ steps.version.outputs.VERSION }}"
+            license "MIT"
+
+            if Hardware::CPU.intel?
+              url "https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-amd64.tar.gz"
+              sha256 "${{ steps.checksums.outputs.SHA256_AMD64 }}"
+            else
+              url "https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-arm64.tar.gz"
+              sha256 "${{ steps.checksums.outputs.SHA256_ARM64 }}"
+            end
+
+            def install
+              if Hardware::CPU.intel?
+                bin.install "bump-tui-darwin-amd64" => "bump-tui"
+              else
+                bin.install "bump-tui-darwin-arm64" => "bump-tui"
+              end
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/bump-tui -version")
+            end
+          end
+          EOF
 
       - name: Commit and push the update
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/bump.rb
-          git commit -m "Update bump to version ${{ steps.version.outputs.VERSION }}"
+          git commit -m "Update bump-tui to version ${{ steps.version.outputs.VERSION }}"
           git push
