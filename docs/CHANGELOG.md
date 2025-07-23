@@ -1,5 +1,14 @@
 # Changelog
 
+# 0.1.2 (2025-07-22)
+
+## Features
+- Renamed command from `bump-tui` to `bump` for easier usage
+
+## Bug Fixes
+- Fixed spinner animation during command execution
+
+
 # 0.1.1 (2025-07-22)
 
 ## Bug Fixes
