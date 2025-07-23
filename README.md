@@ -60,6 +60,40 @@ DEBUG=1 ./build/bump-tui   # Enable debug logging
 - **C++** - `CMakeLists.txt`
 - **PlatformIO** - `platformio.ini`, `library.json`, `library.properties`
 
+## .bump Configuration File
+
+You can create a `.bump` file in your repository root to specify multiple version files to manage and keep in sync.
+
+### Example Configuration
+
+```toml
+# List of files to manage (file types are auto-detected)
+[[files]]
+path = "Cargo.toml"
+description = "Rust package manifest"
+
+[[files]]
+path = "pyproject.toml"
+description = "Python project configuration"
+
+[[files]]
+path = "platformio.ini"
+description = "PlatformIO project configuration"
+```
+
+### Configuration Options
+
+- `files` array: List of version files to manage
+  - `path` (string): Path to the file relative to repository root
+  - `description` (string, optional): Human-readable description
+
+### Behavior
+
+- When a `.bump` file exists, it takes precedence over automatic detection
+- File types are automatically detected based on filename
+- All configured files are updated when bumping versions
+- All configured files must have matching versions (automatically enforced)
+
 ## TUI Flow
 
 1. **Welcome Screen** - Project detection and initialization
