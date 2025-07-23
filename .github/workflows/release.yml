@@ -48,17 +48,17 @@ jobs:
           LDFLAGS="-X main.version=$VERSION -X main.commit=$COMMIT -X main.date=$DATE"
           
           mkdir -p build
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "$LDFLAGS" -o build/bump-tui-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.extension }} .
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags "$LDFLAGS" -o build/bump-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.extension }} .
           
           # Create tarball
           cd build
-          tar -czf "bump-tui-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" bump-tui-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.extension }}
+          tar -czf "bump-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" bump-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.extension }}
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bump-tui-${{ matrix.os }}-${{ matrix.arch }}
-          path: build/bump-tui-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+          name: bump-${{ matrix.os }}-${{ matrix.arch }}
+          path: build/bump-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
 
   release:
     name: Publish GitHub Release
@@ -80,10 +80,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            release-assets/bump-tui-linux-amd64/bump-tui-linux-amd64.tar.gz
-            release-assets/bump-tui-darwin-amd64/bump-tui-darwin-amd64.tar.gz
-            release-assets/bump-tui-darwin-arm64/bump-tui-darwin-arm64.tar.gz
-            release-assets/bump-tui-windows-amd64/bump-tui-windows-amd64.tar.gz
+            release-assets/bump-linux-amd64/bump-linux-amd64.tar.gz
+            release-assets/bump-darwin-amd64/bump-darwin-amd64.tar.gz
+            release-assets/bump-darwin-arm64/bump-darwin-arm64.tar.gz
+            release-assets/bump-windows-amd64/bump-windows-amd64.tar.gz
           generate_release_notes: true
 
   update-homebrew:
@@ -116,12 +116,12 @@ jobs:
       - name: Download release binaries and get checksums
         run: |
           # Download macOS Intel binary for Homebrew (most common)
-          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-amd64.tar.gz
-          echo "SHA256_AMD64=$(shasum -a 256 bump-tui-darwin-amd64.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-darwin-amd64.tar.gz
+          echo "SHA256_AMD64=$(shasum -a 256 bump-darwin-amd64.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
           
           # Download macOS ARM binary for Apple Silicon
-          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-arm64.tar.gz
-          echo "SHA256_ARM64=$(shasum -a 256 bump-tui-darwin-arm64.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+          wget https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-darwin-arm64.tar.gz
+          echo "SHA256_ARM64=$(shasum -a 256 bump-darwin-arm64.tar.gz | awk '{ print $1 }')" >> $GITHUB_OUTPUT
         id: checksums
 
       - name: Update the formula
@@ -135,23 +135,23 @@ jobs:
             license "MIT"
 
             if Hardware::CPU.intel?
-              url "https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-amd64.tar.gz"
+              url "https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-darwin-amd64.tar.gz"
               sha256 "${{ steps.checksums.outputs.SHA256_AMD64 }}"
             else
-              url "https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-tui-darwin-arm64.tar.gz"
+              url "https://github.com/MattressPadley/bump/releases/download/${{ github.ref_name }}/bump-darwin-arm64.tar.gz"
               sha256 "${{ steps.checksums.outputs.SHA256_ARM64 }}"
             end
 
             def install
               if Hardware::CPU.intel?
-                bin.install "bump-tui-darwin-amd64" => "bump-tui"
+                bin.install "bump-darwin-amd64" => "bump"
               else
-                bin.install "bump-tui-darwin-arm64" => "bump-tui"
+                bin.install "bump-darwin-arm64" => "bump"
               end
             end
 
             test do
-              assert_match version.to_s, shell_output("#{bin}/bump-tui -version")
+              assert_match version.to_s, shell_output("#{bin}/bump -version")
             end
           end
           EOF
@@ -161,5 +161,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/bump.rb
-          git commit -m "Update bump-tui to version ${{ steps.version.outputs.VERSION }}"
+          git commit -m "Update bump to version ${{ steps.version.outputs.VERSION }}"
           git push
