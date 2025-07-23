@@ -157,8 +157,38 @@ func NewMainModel() MainModel {
 		},
 	}
 	
-	versionList := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	// Create custom delegate with Catppuccin colors
+	delegate := list.NewDefaultDelegate()
+	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color("#8aadf4")).
+		Foreground(lipgloss.Color("#8aadf4")).
+		Bold(true).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.SelectedDesc = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color("#8aadf4")).
+		Foreground(lipgloss.Color("#6e738d")).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.NormalTitle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#cad3f5")).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.NormalDesc = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6e738d")).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.DimmedTitle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#5b6078")).
+		Padding(0, 0, 0, 1)
+	delegate.Styles.DimmedDesc = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#494d64")).
+		Padding(0, 0, 0, 1)
+
+	versionList := list.New(items, delegate, 0, 0)
 	versionList.Title = "Select Version Bump Type"
+	versionList.Styles.Title = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#8aadf4")).
+		Bold(true).
+		Padding(0, 1)
 	
 	changelogView := viewport.New(0, 0)
 	
@@ -376,7 +406,7 @@ func (m MainModel) View() string {
 
 func (m MainModel) errorView() string {
 	errorStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF6B6B")).
+		Foreground(lipgloss.Color("#ed8796")).
 		Bold(true)
 	
 	content := lipgloss.JoinVertical(
@@ -385,7 +415,7 @@ func (m MainModel) errorView() string {
 		"",
 		m.err.Error(),
 		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render("Press q to quit"),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d")).Render("Press q to quit"),
 	)
 	
 	return lipgloss.Place(
@@ -399,7 +429,7 @@ func (m MainModel) versionSelectView() string {
 	header := m.headerView("Select Version Bump Type")
 	
 	currentVersionStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#626262"))
+		Foreground(lipgloss.Color("#6e738d"))
 	
 	currentVersion := currentVersionStyle.Render(
 		fmt.Sprintf("Current version: %s", m.versionManager.CurrentVersion.String()),
@@ -429,7 +459,7 @@ func (m MainModel) changelogPreviewView() string {
 	header := m.headerView("Changelog Preview")
 	
 	versionInfoStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575")).
+		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true)
 	
 	versionInfo := versionInfoStyle.Render(
@@ -438,7 +468,7 @@ func (m MainModel) changelogPreviewView() string {
 	
 	changelogStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#626262")).
+		BorderForeground(lipgloss.Color("#494d64")).
 		Padding(1).
 		Width(m.width - 8)
 	
@@ -464,13 +494,13 @@ func (m MainModel) confirmationView() string {
 	header := m.headerView("Confirmation")
 	
 	questionStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFA500")).
+		Foreground(lipgloss.Color("#f5a97f")).
 		Bold(true)
 	
 	question := questionStyle.Render("Are you sure you want to proceed?")
 	
 	summaryStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#626262"))
+		Foreground(lipgloss.Color("#6e738d"))
 	
 	summary := summaryStyle.Render(
 		fmt.Sprintf("This will:\n• Update version to %s\n• Update changelog\n• Create git commit\n• Create git tag v%s",
@@ -501,7 +531,7 @@ func (m MainModel) progressView() string {
 	header := m.headerView("Processing")
 	
 	spinnerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575"))
+		Foreground(lipgloss.Color("#8aadf4"))
 	
 	spinner := spinnerStyle.Render("⠋ Updating version files...")
 	
@@ -521,7 +551,7 @@ func (m MainModel) progressView() string {
 
 func (m MainModel) resultsView() string {
 	successStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575")).
+		Foreground(lipgloss.Color("#a6da95")).
 		Bold(true)
 	
 	content := lipgloss.JoinVertical(
@@ -532,7 +562,7 @@ func (m MainModel) resultsView() string {
 		fmt.Sprintf("Created tag v%s", m.newVersion),
 		"Updated changelog",
 		"",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render("Press q to quit"),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d")).Render("Press q to quit"),
 	)
 	
 	return lipgloss.Place(
@@ -544,7 +574,7 @@ func (m MainModel) resultsView() string {
 
 func (m MainModel) headerView(title string) string {
 	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575")).
+		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true).
 		Align(lipgloss.Center).
 		Width(m.width)
@@ -554,7 +584,7 @@ func (m MainModel) headerView(title string) string {
 
 func (m MainModel) footerView(help string) string {
 	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#626262")).
+		Foreground(lipgloss.Color("#6e738d")).
 		Align(lipgloss.Center).
 		Width(m.width)
 	
@@ -564,13 +594,13 @@ func (m MainModel) footerView(help string) string {
 func (m MainModel) projectFilesView() string {
 	if len(m.versionManager.ProjectFiles) == 0 {
 		return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFA500")).
+			Foreground(lipgloss.Color("#f5a97f")).
 			Render("⚠️ No project files detected")
 	}
 	
 	var files []string
 	for _, file := range m.versionManager.ProjectFiles {
-		fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#626262"))
+		fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d"))
 		files = append(files, fileStyle.Render(fmt.Sprintf("• %s", file.Description)))
 	}
 	
@@ -579,12 +609,12 @@ func (m MainModel) projectFilesView() string {
 
 func (m MainModel) welcomeView() string {
 	title := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575")).
+		Foreground(lipgloss.Color("#8aadf4")).
 		Bold(true).
 		Render("🚀 Bump - Version Manager")
 	
 	subtitle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#626262")).
+		Foreground(lipgloss.Color("#6e738d")).
 		Render("Interactive semantic version management tool")
 	
 	content := lipgloss.JoinVertical(
