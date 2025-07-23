@@ -296,7 +296,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
-		if m.state == changelogGeneratingView {
+		if m.state == changelogGeneratingView || m.state == progressView {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
@@ -407,7 +407,10 @@ func (m MainModel) updateConfirmation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
 		m.state = progressView
-		return m, m.performVersionBump
+		return m, tea.Batch(
+			m.performVersionBump,
+			m.spinner.Tick,
+		)
 	case "n", "N":
 		m.state = versionSelectView
 		return m, nil
@@ -668,7 +671,7 @@ func (m MainModel) progressView() string {
 	spinnerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#8aadf4"))
 
-	spinner := spinnerStyle.Render("⠋ Updating version files...")
+	spinner := spinnerStyle.Render(fmt.Sprintf("%s Updating version files...", m.spinner.View()))
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
