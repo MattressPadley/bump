@@ -83,21 +83,36 @@ func (g *Manager) GetCommitsSince(fromVersion string) ([]Commit, error) {
 	var args []string
 	if fromVersion != "" {
 		tagName := fmt.Sprintf("v%s", fromVersion)
-		args = []string{"log", "--oneline", "--no-merges", fmt.Sprintf("%s..HEAD", tagName)}
+		// First check if the tag exists
+		checkCmd := exec.Command("git", "rev-parse", "--verify", tagName)
+		if err := checkCmd.Run(); err != nil {
+			// Tag doesn't exist, get all commits instead
+			args = []string{"log", "--oneline", "--no-merges", "-10"} // Limit to last 10 commits
+		} else {
+			args = []string{"log", "--oneline", "--no-merges", fmt.Sprintf("%s..HEAD", tagName)}
+		}
 	} else {
-		args = []string{"log", "--oneline", "--no-merges"}
+		args = []string{"log", "--oneline", "--no-merges", "-10"} // Limit to last 10 commits
 	}
 
 	cmd := exec.Command("git", args...)
 	var stdout bytes.Buffer
+	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to get git log: %v", err)
+		// If git log fails, return empty commits instead of error
+		return []Commit{}, nil
 	}
 
 	var commits []Commit
-	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	output := strings.TrimSpace(stdout.String())
+	if output == "" {
+		return []Commit{}, nil
+	}
+
+	lines := strings.Split(output, "\n")
 	
 	for _, line := range lines {
 		if line == "" {

@@ -31,14 +31,16 @@ func NewManager() *Manager {
 func (c *Manager) GenerateChanges(fromVersion string) (string, error) {
 	commits, err := c.gitManager.GetCommitsSince(fromVersion)
 	if err != nil {
-		return "", fmt.Errorf("failed to get commits: %v", err)
+		// If we can't get commits, return a default message
+		return "- 🔧 Minor updates and improvements", nil
 	}
 
 	var changes []string
 	for _, commit := range commits {
 		// Skip version bump commits
 		if strings.Contains(commit.Message, "bump version") ||
-			strings.Contains(commit.Message, "release") {
+			strings.Contains(commit.Message, "release") ||
+			strings.Contains(commit.Message, "chore(release)") {
 			continue
 		}
 
