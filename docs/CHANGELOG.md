@@ -1,5 +1,11 @@
 # Changelog
 
+# 0.1.1 (2025-07-22)
+
+## Bug Fixes
+- Improved GitHub Actions workflow reliability by modifying push strategy
+
+
 # 0.1.0 (2025-07-22)
 
 ## Features
