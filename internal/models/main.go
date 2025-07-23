@@ -271,8 +271,8 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update sub-components
 		m.versionList.SetWidth(msg.Width - 4)
 		m.versionList.SetHeight(msg.Height - 8)
-		m.changelogView.Width = msg.Width - 4
-		m.changelogView.Height = msg.Height - 12
+		m.changelogView.Width = msg.Width - 12  // Account for border + padding
+		m.changelogView.Height = msg.Height - 12 // Account for header, version info, footer, spacing, and borders
 		
 		return m, nil
 		
@@ -580,7 +580,8 @@ func (m MainModel) changelogPreviewView() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#494d64")).
 		Padding(1).
-		Width(m.width - 8)
+		Width(m.changelogView.Width + 4). // Match viewport width + border/padding
+		Height(m.changelogView.Height + 2) // Match viewport height + padding
 	
 	changelog := changelogStyle.Render(m.changelogView.View())
 	
