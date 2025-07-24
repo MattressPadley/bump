@@ -62,35 +62,30 @@ DEBUG=1 ./build/bump-tui   # Enable debug logging
 
 ## .bump Configuration File
 
-You can create a `.bump` file in your repository root to specify multiple version files to manage and keep in sync.
+You can create a `.bump` file in your repository root to specify multiple version files to manage and keep in sync. The format is simple and familiar, like a `.gitignore` file.
 
 ### Example Configuration
 
-```toml
-# List of files to manage (file types are auto-detected)
-[[files]]
-path = "Cargo.toml"
-description = "Rust package manifest"
+```
+# Version files to manage
+Cargo.toml
+pyproject.toml
+platformio.ini
 
-[[files]]
-path = "pyproject.toml"
-description = "Python project configuration"
-
-[[files]]
-path = "platformio.ini"
-description = "PlatformIO project configuration"
+# Comments and empty lines are ignored
+CMakeLists.txt
 ```
 
-### Configuration Options
+### Format
 
-- `files` array: List of version files to manage
-  - `path` (string): Path to the file relative to repository root
-  - `description` (string, optional): Human-readable description
+- One file path per line (relative to repository root)
+- Lines starting with `#` are treated as comments
+- Empty lines are ignored
+- File types are automatically detected based on filename
 
 ### Behavior
 
 - When a `.bump` file exists, it takes precedence over automatic detection
-- File types are automatically detected based on filename
 - All configured files are updated when bumping versions
 - All configured files must have matching versions (automatically enforced)
 
