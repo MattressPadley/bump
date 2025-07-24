@@ -1,5 +1,28 @@
 # Changelog
 
+# 0.1.5 (2025-07-24)
+
+## Bug Fixes
+- Fixed error handling to resolve linting issues
+- Updated golangci-lint configuration for v2.1 compatibility  
+- Updated golangci-lint GitHub Action to latest version with recommended settings
+- Pinned golangci-lint to v1.61.0 for config compatibility
+- Added golangci-lint installation to CI workflow
+- Resolved various golangci-lint issues
+
+## Features
+- Added comprehensive git repository validation with submodule tag checking
+- Added PR review recommendations and comprehensive improvements
+
+## Improvements
+- Improved git validation performance, error handling, and security
+- Updated README with comprehensive improvements and CI/CD details
+
+## Other
+- Added Claude Code Review workflow
+- Added Claude PR Assistant workflow
+
+
 # 0.1.4 (2025-07-24)
 
 ## Features
