@@ -125,18 +125,18 @@ type MainModel struct {
 	changelogManager *changelog.Manager
 
 	// UI components
-	versionList      list.Model
-	changelogView    viewport.Model
-	spinner          spinner.Model
+	versionList   list.Model
+	changelogView viewport.Model
+	spinner       spinner.Model
 
 	// State data
-	selectedBump       bumpType
-	generatedChanges   string
-	newVersion         string
-	showHelp           bool
-	claudeEnabled      bool
-	validationSummary  *git.ValidationSummary
-	validationResults  []git.ValidationResult
+	selectedBump          bumpType
+	generatedChanges      string
+	newVersion            string
+	showHelp              bool
+	claudeEnabled         bool
+	validationSummary     *git.ValidationSummary
+	validationResults     []git.ValidationResult
 	currentValidationStep string
 }
 
@@ -277,11 +277,17 @@ func (m MainModel) generateChangelog() tea.Msg {
 
 func (m MainModel) validateRepository() tea.Cmd {
 	return func() tea.Msg {
-		summary, err := m.gitManager.ValidateRepositoryStatus(nil)
+		// Provide a no-op callback since TUI doesn't need progress updates during validation
+		noOpCallback := func(result git.ValidationResult) {
+			// Progress updates during validation are not needed in TUI mode
+			// All results are shown together after validation completes
+		}
+
+		summary, err := m.gitManager.ValidateRepositoryStatus(noOpCallback)
 		if err != nil {
 			return validationCompleteMsg{err: err}
 		}
-		
+
 		return validationCompleteMsg{summary: summary}
 	}
 }
@@ -849,7 +855,7 @@ func (m MainModel) validationView() string {
 	// Results summary - ALWAYS show detailed results when available
 	var resultsContent []string
 	if m.validationSummary != nil {
-		resultsContent = append(resultsContent, 
+		resultsContent = append(resultsContent,
 			lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#8aadf4")).
 				Bold(true).
@@ -896,16 +902,16 @@ func (m MainModel) validationView() string {
 		// Add summary stats
 		resultsContent = append(resultsContent, "")
 		summaryStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d"))
-		
+
 		if m.validationSummary.HasErrors {
-			resultsContent = append(resultsContent, 
+			resultsContent = append(resultsContent,
 				summaryStyle.Render(fmt.Sprintf("❌ Found blocking errors - cannot proceed with version bump")))
 		} else if m.validationSummary.HasWarnings {
-			resultsContent = append(resultsContent, 
-				summaryStyle.Render(fmt.Sprintf("⚠️  Found %d validation warnings - can proceed with caution", 
+			resultsContent = append(resultsContent,
+				summaryStyle.Render(fmt.Sprintf("⚠️  Found %d validation warnings - can proceed with caution",
 					m.countWarnings())))
 		} else {
-			resultsContent = append(resultsContent, 
+			resultsContent = append(resultsContent,
 				summaryStyle.Render("✅ All validation checks passed - repository is ready"))
 		}
 	}

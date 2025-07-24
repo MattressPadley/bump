@@ -31,8 +31,8 @@ type ProjectFile struct {
 }
 
 type Manager struct {
-	CurrentVersion *semver.Version `json:"current_version"`
-	ProjectFiles   []ProjectFile   `json:"project_files"`
+	CurrentVersion *semver.Version    `json:"current_version"`
+	ProjectFiles   []ProjectFile      `json:"project_files"`
 	BumpConfig     *config.BumpConfig `json:"bump_config,omitempty"`
 }
 
@@ -49,40 +49,40 @@ func (m *Manager) DetectVersionFiles(projectRoot string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load .bump config: %v", err)
 	}
-	
+
 	if bumpConfig != nil {
 		m.BumpConfig = bumpConfig
 		return m.detectVersionFilesFromConfig(projectRoot)
 	}
-	
+
 	// Fall back to automatic detection
 	return m.detectVersionFilesAutomatically(projectRoot)
 }
 
 func (m *Manager) detectVersionFilesFromConfig(projectRoot string) error {
 	var versions []*semver.Version
-	
+
 	for _, configFile := range m.BumpConfig.Files {
 		fullPath := filepath.Join(projectRoot, configFile.Path)
-		
+
 		// Auto-detect project type based on file name/extension
 		projectType := m.detectProjectTypeFromPath(configFile.Path)
 		if projectType == "" {
 			return fmt.Errorf("unable to determine project type for file: %s", configFile.Path)
 		}
-		
+
 		projectFile := ProjectFile{
 			Path:        fullPath,
 			Type:        projectType,
 			Description: m.getDefaultDescription(projectType),
 		}
-		
+
 		// Extract version from this file
 		version, err := m.extractVersionFromFile(fullPath, projectType)
 		if err != nil {
 			return fmt.Errorf("failed to extract version from %s: %v", configFile.Path, err)
 		}
-		
+
 		if version != nil {
 			versions = append(versions, version)
 			// Use the first valid version as current version
@@ -90,15 +90,15 @@ func (m *Manager) detectVersionFilesFromConfig(projectRoot string) error {
 				m.CurrentVersion = version
 			}
 		}
-		
+
 		m.ProjectFiles = append(m.ProjectFiles, projectFile)
 	}
-	
+
 	// Always check version sync when using .bump config
 	if err := m.checkVersionSync(versions); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -141,7 +141,7 @@ func (m *Manager) detectVersionFilesAutomatically(projectRoot string) error {
 // detectProjectTypeFromPath determines the project type based on file path
 func (m *Manager) detectProjectTypeFromPath(filePath string) ProjectType {
 	fileName := filepath.Base(filePath)
-	
+
 	switch fileName {
 	case "go.mod":
 		return Go
@@ -181,15 +181,15 @@ func (m *Manager) checkVersionSync(versions []*semver.Version) error {
 	if len(versions) <= 1 {
 		return nil // Nothing to sync or only one version
 	}
-	
+
 	firstVersion := versions[0]
 	for i, version := range versions[1:] {
 		if !version.Equal(firstVersion) {
-			return fmt.Errorf("version mismatch: file %d has version %s, but file 0 has version %s", 
+			return fmt.Errorf("version mismatch: file %d has version %s, but file 0 has version %s",
 				i+1, version.String(), firstVersion.String())
 		}
 	}
-	
+
 	return nil
 }
 
@@ -198,38 +198,37 @@ func (m *Manager) CheckAllVersionsInSync() error {
 	if m.BumpConfig == nil {
 		return nil // No config, nothing to check
 	}
-	
+
 	var versions []*semver.Version
 	var filePaths []string
-	
+
 	for _, projectFile := range m.ProjectFiles {
 		version, err := m.extractVersionFromFile(projectFile.Path, projectFile.Type)
 		if err != nil {
 			return fmt.Errorf("failed to extract version from %s: %v", projectFile.Path, err)
 		}
-		
+
 		if version != nil {
 			versions = append(versions, version)
 			filePaths = append(filePaths, projectFile.Path)
 		}
 	}
-	
+
 	// Check if all versions are the same
 	if len(versions) <= 1 {
 		return nil
 	}
-	
+
 	firstVersion := versions[0]
 	for i, version := range versions[1:] {
 		if !version.Equal(firstVersion) {
-			return fmt.Errorf("version mismatch: %s has version %s, but %s has version %s", 
+			return fmt.Errorf("version mismatch: %s has version %s, but %s has version %s",
 				filePaths[i+1], version.String(), filePaths[0], firstVersion.String())
 		}
 	}
-	
+
 	return nil
 }
-
 
 func (m *Manager) extractVersionFromFile(filePath string, projectType ProjectType) (*semver.Version, error) {
 	content, err := os.ReadFile(filePath)
@@ -494,4 +493,3 @@ func (m *Manager) updateLibraryPropertiesVersion(content, newVersion string) (st
 	re := regexp.MustCompile(`(version\s*=\s*)([^\r\n]+)`)
 	return re.ReplaceAllString(content, "${1}"+newVersion), nil
 }
-

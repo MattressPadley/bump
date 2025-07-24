@@ -2,9 +2,18 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
+)
+
+const (
+	// GitCommandTimeout is the default timeout for git operations
+	GitCommandTimeout = 30 * time.Second
+	// CommitHashLength is the expected length of a git commit hash
+	CommitHashLength = 40
 )
 
 type Manager struct{}
@@ -13,8 +22,66 @@ func NewManager() *Manager {
 	return &Manager{}
 }
 
+// validateSubmodulePath validates that a submodule path is safe and within repository bounds
+func (g *Manager) validateSubmodulePath(path string) error {
+	// Reject empty paths
+	if path == "" {
+		return fmt.Errorf("submodule path cannot be empty")
+	}
+
+	// Reject absolute paths
+	if strings.HasPrefix(path, "/") {
+		return fmt.Errorf("submodule path cannot be absolute: %s", path)
+	}
+
+	// Reject paths with path traversal attempts
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("submodule path contains path traversal: %s", path)
+	}
+
+	// Reject paths with Windows drive letters
+	if len(path) >= 2 && path[1] == ':' {
+		return fmt.Errorf("submodule path cannot contain drive letters: %s", path)
+	}
+
+	// Reject paths starting with ~ (home directory)
+	if strings.HasPrefix(path, "~") {
+		return fmt.Errorf("submodule path cannot start with ~: %s", path)
+	}
+
+	return nil
+}
+
+// runGitCommandWithTimeout runs a git command with a timeout context
+func (g *Manager) runGitCommandWithTimeout(args ...string) (*exec.Cmd, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", args...)
+	return cmd, nil
+}
+
+// runGitCommandWithOutput runs a git command with timeout and returns stdout
+func (g *Manager) runGitCommandWithOutput(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", args...)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git %s failed: %v", strings.Join(args, " "), err)
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
+
 func (g *Manager) IsGitRepository() error {
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--git-dir")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("not a git repository")
 	}
@@ -24,13 +91,13 @@ func (g *Manager) IsGitRepository() error {
 func (g *Manager) CommitVersionBump(version string) error {
 	// Add all changes
 	if err := g.runGitCommand("add", "."); err != nil {
-		return fmt.Errorf("failed to stage changes: %v", err)
+		return fmt.Errorf("unable to stage changes for commit. Ensure you have write permissions: %v", err)
 	}
 
 	// Create commit
 	message := fmt.Sprintf("chore(release): bump version to %s", version)
 	if err := g.runGitCommand("commit", "-m", message); err != nil {
-		return fmt.Errorf("failed to create commit: %v", err)
+		return fmt.Errorf("unable to create version bump commit. Check git configuration: %v", err)
 	}
 
 	return nil
@@ -41,7 +108,7 @@ func (g *Manager) CreateTag(version string) error {
 	message := fmt.Sprintf("Release version %s", version)
 
 	if err := g.runGitCommand("tag", "-a", tagName, "-m", message); err != nil {
-		return fmt.Errorf("failed to create tag: %v", err)
+		return fmt.Errorf("unable to create git tag %s. Tag may already exist: %v", tagName, err)
 	}
 
 	return nil
@@ -50,7 +117,7 @@ func (g *Manager) CreateTag(version string) error {
 func (g *Manager) PushChanges() error {
 	// Push commits first
 	if err := g.runGitCommand("push", "origin", "HEAD"); err != nil {
-		return fmt.Errorf("failed to push changes: %v", err)
+		return fmt.Errorf("unable to push commits to remote. Check network and permissions: %v", err)
 	}
 	return nil
 }
@@ -59,30 +126,33 @@ func (g *Manager) PushTag(version string) error {
 	tagName := fmt.Sprintf("v%s", version)
 	// Push tag separately to ensure workflow triggers
 	if err := g.runGitCommand("push", "origin", tagName); err != nil {
-		return fmt.Errorf("failed to push tag: %v", err)
+		return fmt.Errorf("unable to push tag %s to remote. Check network and permissions: %v", tagName, err)
 	}
 	return nil
 }
-
-
 
 func (g *Manager) GetCommitsSince(fromVersion string) ([]Commit, error) {
 	var args []string
 	if fromVersion != "" {
 		tagName := fmt.Sprintf("v%s", fromVersion)
 		// First check if the tag exists
-		checkCmd := exec.Command("git", "rev-parse", "--verify", tagName)
+		ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+		checkCmd := exec.CommandContext(ctx, "git", "rev-parse", "--verify", tagName)
 		if err := checkCmd.Run(); err != nil {
 			// Tag doesn't exist, get all commits instead
 			args = []string{"log", "--oneline", "--no-merges", "-10"} // Limit to last 10 commits
 		} else {
 			args = []string{"log", "--oneline", "--no-merges", fmt.Sprintf("%s..HEAD", tagName)}
 		}
+		cancel()
 	} else {
 		args = []string{"log", "--oneline", "--no-merges", "-10"} // Limit to last 10 commits
 	}
 
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -121,31 +191,40 @@ func (g *Manager) GetCommitsSince(fromVersion string) ([]Commit, error) {
 }
 
 func (g *Manager) GetCurrentBranch() (string, error) {
-	cmd := exec.Command("git", "branch", "--show-current")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "branch", "--show-current")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to get current branch: %v", err)
+		return "", fmt.Errorf("unable to determine current git branch: %v", err)
 	}
 
 	return strings.TrimSpace(stdout.String()), nil
 }
 
 func (g *Manager) HasUncommittedChanges() (bool, error) {
-	cmd := exec.Command("git", "status", "--porcelain")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "status", "--porcelain")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
 	if err := cmd.Run(); err != nil {
-		return false, fmt.Errorf("failed to check git status: %v", err)
+		return false, fmt.Errorf("unable to check repository status: %v", err)
 	}
 
 	return len(strings.TrimSpace(stdout.String())) > 0, nil
 }
 
 func (g *Manager) runGitCommand(args ...string) error {
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -179,10 +258,10 @@ type ValidationResult struct {
 
 // ValidationSummary contains the overall validation results
 type ValidationSummary struct {
-	Results      []ValidationResult
-	HasErrors    bool
-	HasWarnings  bool
-	CanProceed   bool
+	Results     []ValidationResult
+	HasErrors   bool
+	HasWarnings bool
+	CanProceed  bool
 }
 
 // ProgressCallback is called during validation to report progress
@@ -315,7 +394,7 @@ func (g *Manager) validateRepositoryStatus(step ValidationStep) ValidationResult
 	// Check if we're in a git repository
 	if err := g.IsGitRepository(); err != nil {
 		result.Success = false
-		result.Errors = append(result.Errors, "Not in a git repository")
+		result.Errors = append(result.Errors, "Current directory is not a git repository. Run 'git init' or navigate to a git repository.")
 		return result
 	}
 
@@ -341,7 +420,7 @@ func (g *Manager) validateWorkingDirectory(step ValidationStep) ValidationResult
 
 	if hasChanges {
 		result.Success = false
-		result.Errors = append(result.Errors, "Working directory has uncommitted changes")
+		result.Errors = append(result.Errors, "Working directory has uncommitted changes. Commit or stash changes before proceeding.")
 	}
 
 	// Check for untracked files
@@ -417,6 +496,13 @@ func (g *Manager) validateSubmodules(step ValidationStep, submodules []Submodule
 
 	tagsFound := 0
 	for _, submodule := range submodules {
+		// Validate submodule path for security
+		if err := g.validateSubmodulePath(submodule.Path); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Insecure submodule path %s: %v", submodule.Name, err))
+			result.Success = false
+			continue
+		}
+
 		// Check if submodule points to a tag
 		isTag, _, err := g.isSubmodulePointingToTag(submodule.Path)
 		if err != nil {
@@ -477,7 +563,10 @@ type Submodule struct {
 
 // getUntrackedFiles returns a list of untracked files
 func (g *Manager) getUntrackedFiles() ([]string, error) {
-	cmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "ls-files", "--others", "--exclude-standard")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
@@ -500,17 +589,36 @@ func (g *Manager) checkRemoteStatus(branch string) error {
 	}
 
 	// Check if remote exists
-	cmd := exec.Command("git", "remote", "get-url", "origin")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	cmd := exec.CommandContext(ctx, "git", "remote", "get-url", "origin")
 	if err := cmd.Run(); err != nil {
+		cancel()
 		return fmt.Errorf("no remote origin configured")
 	}
+	cancel()
 
 	// Fetch to get latest remote refs (but don't show output)
-	cmd = exec.Command("git", "fetch", "--dry-run")
-	cmd.Run() // Ignore errors, this is just a connectivity check
+	ctx, cancel = context.WithTimeout(context.Background(), GitCommandTimeout)
+	cmd = exec.CommandContext(ctx, "git", "fetch", "--dry-run")
+	var fetchErr bytes.Buffer
+	cmd.Stderr = &fetchErr
+	fetchResult := cmd.Run()
+	cancel()
+
+	// Log fetch errors for debugging but don't fail validation
+	if fetchResult != nil {
+		// Return a warning about connectivity instead of silently ignoring
+		fetchErrMsg := strings.TrimSpace(fetchErr.String())
+		if fetchErrMsg != "" {
+			return fmt.Errorf("remote connectivity issue: %v", fetchErrMsg)
+		}
+		return fmt.Errorf("unable to fetch from remote (network or auth issue)")
+	}
 
 	// Check ahead/behind status
-	cmd = exec.Command("git", "rev-list", "--count", "--left-right", fmt.Sprintf("origin/%s...HEAD", branch))
+	ctx, cancel = context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+	cmd = exec.CommandContext(ctx, "git", "rev-list", "--count", "--left-right", fmt.Sprintf("origin/%s...HEAD", branch))
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
@@ -539,17 +647,22 @@ func (g *Manager) checkRemoteStatus(branch string) error {
 // getSubmodules returns a list of git submodules
 func (g *Manager) getSubmodules() ([]Submodule, error) {
 	// First check if .gitmodules exists
-	cmd := exec.Command("git", "ls-files", ".gitmodules")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	cmd := exec.CommandContext(ctx, "git", "ls-files", ".gitmodules")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	
+
 	if err := cmd.Run(); err != nil || strings.TrimSpace(stdout.String()) == "" {
+		cancel()
 		// No .gitmodules file, so no submodules
 		return []Submodule{}, nil
 	}
+	cancel()
 
 	// Get submodule status
-	cmd = exec.Command("git", "submodule", "status")
+	ctx, cancel = context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+	cmd = exec.CommandContext(ctx, "git", "submodule", "status")
 	stdout.Reset()
 	cmd.Stdout = &stdout
 
@@ -570,89 +683,116 @@ func (g *Manager) getSubmodules() ([]Submodule, error) {
 			continue
 		}
 
-		// Parse submodule status line format: "[status]commit path (describe)"
-		// Status chars: ' ' = current, '-' = not initialized, '+' = different commit, 'U' = merge conflicts
-		// Note: Some lines may not have a leading space (different status)
-		
-		if len(line) < 41 { // minimum length for a commit hash (40) + path
+		submodule, err := g.parseSubmoduleStatusLine(line)
+		if err != nil {
+			// Skip malformed lines but don't fail entirely
 			continue
 		}
 
-		var statusChar byte
-		var commit, path string
-		
-		// Check if line starts with a 40-character hex string (commit hash)
-		// If so, there's no status character prefix
-		if len(line) >= 40 && isHexString(line[:40]) {
-			// No status character - this is the commit hash directly
-			statusChar = ' ' // Assume current status
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				commit = parts[0]
-				path = parts[1]
-			}
-		} else {
-			// Has status character prefix
-			statusChar = line[0]
-			rest := line[1:]
-			parts := strings.Fields(rest)
-			if len(parts) >= 2 {
-				commit = parts[0]
-				path = parts[1]
-			}
-		}
-		
-		if commit == "" || path == "" {
+		// Validate submodule path for security before processing
+		if err := g.validateSubmodulePath(submodule.Path); err != nil {
+			// Skip insecure submodule paths but don't fail entirely
 			continue
 		}
-		
-		// Extract name from path (use last component)
-		name := path
-		if idx := strings.LastIndex(path, "/"); idx >= 0 {
-			name = path[idx+1:]
-		}
 
-		submodules = append(submodules, Submodule{
-			Name:   name,
-			Path:   path,
-			Commit: commit,
-			URL:    "", // We'll populate this if needed
-		})
-
-		// Note: statusChar can be used for additional validation if needed
-		_ = statusChar
+		submodules = append(submodules, submodule)
 	}
 
 	return submodules, nil
+}
+
+// parseSubmoduleStatusLine parses a single line from 'git submodule status' output
+// Format: "[status]commit path (describe)" where status is optional
+func (g *Manager) parseSubmoduleStatusLine(line string) (Submodule, error) {
+	// Check minimum length for a commit hash + path
+	if len(line) < CommitHashLength+1 {
+		return Submodule{}, fmt.Errorf("line too short: %s", line)
+	}
+
+	var statusChar byte
+	var commit, path string
+
+	// Check if line starts with a commit hash (no status character prefix)
+	if len(line) >= CommitHashLength && isHexString(line[:CommitHashLength]) {
+		// No status character - this is the commit hash directly
+		statusChar = ' ' // Assume current status
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			commit = parts[0]
+			path = parts[1]
+		}
+	} else {
+		// Has status character prefix
+		statusChar = line[0]
+		rest := line[1:]
+		parts := strings.Fields(rest)
+		if len(parts) >= 2 {
+			commit = parts[0]
+			path = parts[1]
+		}
+	}
+
+	if commit == "" || path == "" {
+		return Submodule{}, fmt.Errorf("could not parse commit and path from: %s", line)
+	}
+
+	// Validate commit hash format
+	if len(commit) != CommitHashLength || !isHexString(commit) {
+		return Submodule{}, fmt.Errorf("invalid commit hash format: %s", commit)
+	}
+
+	// Extract name from path (use last component)
+	name := path
+	if idx := strings.LastIndex(path, "/"); idx >= 0 {
+		name = path[idx+1:]
+	}
+
+	// Note: statusChar can be used for additional validation if needed
+	_ = statusChar
+
+	return Submodule{
+		Name:   name,
+		Path:   path,
+		Commit: commit,
+		URL:    "", // We'll populate this if needed
+	}, nil
 }
 
 // isSubmodulePointingToTag checks if a submodule is pointing to a git tag
 func (g *Manager) isSubmodulePointingToTag(submodulePath string) (bool, string, error) {
 	// Check if the submodule directory exists and is initialized
 	// Modern git uses .git files that point to the actual git directory
-	cmd := exec.Command("git", "-C", submodulePath, "rev-parse", "--git-dir")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	cmd := exec.CommandContext(ctx, "git", "-C", submodulePath, "rev-parse", "--git-dir")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		cancel()
 		return false, "", fmt.Errorf("submodule %s is not initialized: %v (stderr: %s)", submodulePath, err, stderr.String())
 	}
+	cancel()
 
 	// Get the commit hash that the submodule is currently pointing to
 	// Use git rev-parse HEAD in the submodule directory
-	cmd = exec.Command("git", "-C", submodulePath, "rev-parse", "HEAD")
+	ctx, cancel = context.WithTimeout(context.Background(), GitCommandTimeout)
+	cmd = exec.CommandContext(ctx, "git", "-C", submodulePath, "rev-parse", "HEAD")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	stderr.Reset()
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		cancel()
 		return false, "", fmt.Errorf("failed to get submodule HEAD commit for %s: %v (stderr: %s)", submodulePath, err, stderr.String())
 	}
+	cancel()
 
 	currentCommit := strings.TrimSpace(stdout.String())
 
 	// Check if this commit corresponds to any tags in the submodule
-	cmd = exec.Command("git", "-C", submodulePath, "tag", "--points-at", currentCommit)
+	ctx, cancel = context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+	cmd = exec.CommandContext(ctx, "git", "-C", submodulePath, "tag", "--points-at", currentCommit)
 	stdout.Reset()
 	cmd.Stdout = &stdout
 
@@ -662,7 +802,7 @@ func (g *Manager) isSubmodulePointingToTag(submodulePath string) (bool, string, 
 	}
 
 	tagOutput := strings.TrimSpace(stdout.String())
-	
+
 	if tagOutput == "" {
 		return false, "", nil
 	}
@@ -674,7 +814,10 @@ func (g *Manager) isSubmodulePointingToTag(submodulePath string) (bool, string, 
 
 // submoduleHasChanges checks if a submodule has uncommitted changes
 func (g *Manager) submoduleHasChanges(submodulePath string) (bool, error) {
-	cmd := exec.Command("git", "-C", submodulePath, "status", "--porcelain")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "-C", submodulePath, "status", "--porcelain")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 
@@ -687,7 +830,10 @@ func (g *Manager) submoduleHasChanges(submodulePath string) (bool, error) {
 
 // checkGitConnectivity checks basic git connectivity
 func (g *Manager) checkGitConnectivity() error {
-	cmd := exec.Command("git", "remote", "-v")
+	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", "remote", "-v")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("no git remotes configured")
 	}

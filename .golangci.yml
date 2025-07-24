@@ -1,0 +1,44 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    - misspell
+    - unconvert
+    - unparam
+    - gosec
+    - gocyclo
+  
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  gosec:
+    excludes:
+      - G204 # Subprocess launched with variable - we validate git commands
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - gosec
+    # Ignore long lines in test tables
+    - path: _test\.go
+      text: "line is"
+      linters:
+        - lll
