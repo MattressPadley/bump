@@ -272,13 +272,7 @@ func (m MainModel) generateChangelog() tea.Msg {
 
 func (m MainModel) validateRepository() tea.Cmd {
 	return func() tea.Msg {
-		// Provide a no-op callback since TUI doesn't need progress updates during validation
-		noOpCallback := func(result git.ValidationResult) {
-			// Progress updates during validation are not needed in TUI mode
-			// All results are shown together after validation completes
-		}
-
-		summary, err := m.gitManager.ValidateRepositoryStatus(noOpCallback)
+		summary, err := m.gitManager.ValidateRepositoryStatus()
 		if err != nil {
 			return validationCompleteMsg{err: err}
 		}

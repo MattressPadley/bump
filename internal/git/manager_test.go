@@ -30,7 +30,7 @@ func TestValidateRepositoryStatus(t *testing.T) {
 			expectError:        false,
 			expectWarnings:     true, // Remote connectivity check typically generates warnings
 			expectCanProceed:   true,
-			minValidationSteps: 6,
+			minValidationSteps: ValidationStepCount,
 		},
 		{
 			name: "repository with uncommitted changes",
@@ -47,7 +47,7 @@ func TestValidateRepositoryStatus(t *testing.T) {
 			expectError:        true,
 			expectWarnings:     true, // Will also have connectivity warnings
 			expectCanProceed:   false,
-			minValidationSteps: 6,
+			minValidationSteps: ValidationStepCount,
 		},
 		{
 			name: "repository with ignored untracked files",
@@ -68,7 +68,7 @@ func TestValidateRepositoryStatus(t *testing.T) {
 			expectError:        false, // Ignored files don't cause errors
 			expectWarnings:     true,  // Still have remote warnings
 			expectCanProceed:   true,
-			minValidationSteps: 6,
+			minValidationSteps: ValidationStepCount,
 		},
 		{
 			name: "repository with visible untracked files",
@@ -85,7 +85,7 @@ func TestValidateRepositoryStatus(t *testing.T) {
 			expectError:        true, // Visible untracked files cause uncommitted changes error
 			expectWarnings:     true, // Also have untracked file warnings + remote warnings
 			expectCanProceed:   false,
-			minValidationSteps: 6,
+			minValidationSteps: ValidationStepCount,
 		},
 	}
 
@@ -111,7 +111,7 @@ func TestValidateRepositoryStatus(t *testing.T) {
 
 			// Run validation
 			manager := NewManager()
-			summary, err := manager.ValidateRepositoryStatus(nil)
+			summary, err := manager.ValidateRepositoryStatus()
 
 			// Check basic expectations
 			if tt.expectError && err != nil {
@@ -540,6 +540,36 @@ func TestValidateSubmodulePath(t *testing.T) {
 			name:        "Valid nested path",
 			path:        "third-party/libs/openssl",
 			expectError: false,
+		},
+		{
+			name:        "Path that cleans to parent directory",
+			path:        "valid/../..",
+			expectError: true,
+		},
+		{
+			name:        "Path that cleans to current directory",
+			path:        "submodule/.",
+			expectError: false,
+		},
+		{
+			name:        "Path with consecutive separators",
+			path:        "lib//submodule",
+			expectError: false,
+		},
+		{
+			name:        "Path with null byte",
+			path:        "lib\x00/malicious",
+			expectError: true,
+		},
+		{
+			name:        "Path with newline",
+			path:        "lib\n/malicious",
+			expectError: true,
+		},
+		{
+			name:        "Complex path traversal that normalizes",
+			path:        "a/b/../../../c",
+			expectError: true,
 		},
 	}
 

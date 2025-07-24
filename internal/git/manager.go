@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,6 +16,10 @@ const (
 	GitCommandTimeout = 30 * time.Second
 	// CommitHashLength is the expected length of a git commit hash
 	CommitHashLength = 40
+	// MaxCommitsToAnalyze is the maximum number of commits to analyze when no previous tag exists
+	MaxCommitsToAnalyze = 10
+	// ValidationStepCount is the total number of validation steps performed
+	ValidationStepCount = 6
 )
 
 type Manager struct{}
@@ -29,13 +35,16 @@ func (g *Manager) validateSubmodulePath(path string) error {
 		return fmt.Errorf("submodule path cannot be empty")
 	}
 
-	// Reject absolute paths
-	if strings.HasPrefix(path, "/") {
+	// Clean the path to normalize it and resolve any path traversal attempts
+	cleanPath := filepath.Clean(path)
+	
+	// Reject absolute paths (check both original and cleaned paths)
+	if filepath.IsAbs(path) || filepath.IsAbs(cleanPath) {
 		return fmt.Errorf("submodule path cannot be absolute: %s", path)
 	}
 
-	// Reject paths with path traversal attempts
-	if strings.Contains(path, "..") {
+	// Reject paths with path traversal attempts (check both original and cleaned)
+	if strings.Contains(path, "..") || strings.Contains(cleanPath, "..") {
 		return fmt.Errorf("submodule path contains path traversal: %s", path)
 	}
 
@@ -45,8 +54,31 @@ func (g *Manager) validateSubmodulePath(path string) error {
 	}
 
 	// Reject paths starting with ~ (home directory)
-	if strings.HasPrefix(path, "~") {
+	if strings.HasPrefix(path, "~") || strings.HasPrefix(cleanPath, "~") {
 		return fmt.Errorf("submodule path cannot start with ~: %s", path)
+	}
+
+	// Additional boundary checks on the cleaned path
+	// Ensure the cleaned path doesn't try to escape the current directory
+	if cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+		return fmt.Errorf("submodule path tries to escape repository bounds: %s (resolved to: %s)", path, cleanPath)
+	}
+
+	// Reject paths that resolve to the root directory
+	if cleanPath == "." || cleanPath == "/" {
+		return fmt.Errorf("submodule path cannot resolve to root directory: %s", path)
+	}
+
+	// Check for suspicious path elements that could indicate malicious intent
+	pathElements := strings.Split(cleanPath, string(filepath.Separator))
+	for _, element := range pathElements {
+		if element == "" {
+			continue // Skip empty elements (can occur with consecutive separators)
+		}
+		// Reject paths with null bytes or other control characters
+		if strings.ContainsAny(element, "\x00\n\r\t") {
+			return fmt.Errorf("submodule path contains invalid characters: %s", path)
+		}
 	}
 
 	return nil
@@ -116,13 +148,13 @@ func (g *Manager) GetCommitsSince(fromVersion string) ([]Commit, error) {
 		checkCmd := exec.CommandContext(ctx, "git", "rev-parse", "--verify", tagName)
 		if err := checkCmd.Run(); err != nil {
 			// Tag doesn't exist, get all commits instead
-			args = []string{"log", "--oneline", "--no-merges", "-10"} // Limit to last 10 commits
+			args = []string{"log", "--oneline", "--no-merges", fmt.Sprintf("-%d", MaxCommitsToAnalyze)} // Limit to last N commits
 		} else {
 			args = []string{"log", "--oneline", "--no-merges", fmt.Sprintf("%s..HEAD", tagName)}
 		}
 		cancel()
 	} else {
-		args = []string{"log", "--oneline", "--no-merges", "-10"} // Limit to last 10 commits
+		args = []string{"log", "--oneline", "--no-merges", fmt.Sprintf("-%d", MaxCommitsToAnalyze)} // Limit to last N commits
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
@@ -240,69 +272,89 @@ type ValidationSummary struct {
 	CanProceed  bool
 }
 
-// ProgressCallback is called during validation to report progress
-type ProgressCallback func(ValidationResult)
-
 // ValidateRepositoryStatus performs comprehensive git repository validation
-func (g *Manager) ValidateRepositoryStatus(progressCallback ProgressCallback) (*ValidationSummary, error) {
+func (g *Manager) ValidateRepositoryStatus() (*ValidationSummary, error) {
 	steps := []ValidationStep{
-		{Name: "repository", Description: "Checking repository status...", Index: 1, Total: 6},
-		{Name: "working_dir", Description: "Validating working directory...", Index: 2, Total: 6},
-		{Name: "branch", Description: "Checking branch status...", Index: 3, Total: 6},
-		{Name: "submodules_scan", Description: "Scanning for submodules...", Index: 4, Total: 6},
-		{Name: "submodules_status", Description: "Validating submodule states...", Index: 5, Total: 6},
-		{Name: "final", Description: "Final validation checks...", Index: 6, Total: 6},
+		{Name: "repository", Description: "Checking repository status...", Index: 1, Total: ValidationStepCount},
+		{Name: "working_dir", Description: "Validating working directory...", Index: 2, Total: ValidationStepCount},
+		{Name: "branch", Description: "Checking branch status...", Index: 3, Total: ValidationStepCount},
+		{Name: "submodules_scan", Description: "Scanning for submodules...", Index: 4, Total: ValidationStepCount},
+		{Name: "submodules_status", Description: "Validating submodule states...", Index: 5, Total: ValidationStepCount},
+		{Name: "final", Description: "Final validation checks...", Index: 6, Total: ValidationStepCount},
 	}
 
-	var results []ValidationResult
+	// Run independent validations in parallel
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	results := make([]ValidationResult, ValidationStepCount) // Pre-allocate for all validation steps
 	hasErrors := false
 	hasWarnings := false
 
-	// Step 1: Check repository status
-	result := g.validateRepositoryStatus(steps[0])
-	results = append(results, result)
-	if progressCallback != nil {
-		progressCallback(result)
-	}
-	if !result.Success {
-		hasErrors = true
-	}
-	if len(result.Warnings) > 0 {
-		hasWarnings = true
+	// Channel for collecting errors from goroutines
+	errChan := make(chan error, 3)
+
+	// Step 1: Check repository status (parallel)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		result := g.validateRepositoryStatus(steps[0])
+		mu.Lock()
+		results[0] = result
+		if !result.Success {
+			hasErrors = true
+		}
+		if len(result.Warnings) > 0 {
+			hasWarnings = true
+		}
+		mu.Unlock()
+	}()
+
+	// Step 2: Validate working directory (parallel)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		result := g.validateWorkingDirectory(steps[1])
+		mu.Lock()
+		results[1] = result
+		if !result.Success {
+			hasErrors = true
+		}
+		if len(result.Warnings) > 0 {
+			hasWarnings = true
+		}
+		mu.Unlock()
+	}()
+
+	// Step 3: Check branch status (parallel)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		result := g.validateBranchStatus(steps[2])
+		mu.Lock()
+		results[2] = result
+		if !result.Success {
+			hasErrors = true
+		}
+		if len(result.Warnings) > 0 {
+			hasWarnings = true
+		}
+		mu.Unlock()
+	}()
+
+	// Wait for parallel operations to complete
+	wg.Wait()
+	close(errChan)
+	
+	// Check if any errors occurred in goroutines
+	for err := range errChan {
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Step 2: Validate working directory
-	result = g.validateWorkingDirectory(steps[1])
-	results = append(results, result)
-	if progressCallback != nil {
-		progressCallback(result)
-	}
-	if !result.Success {
-		hasErrors = true
-	}
-	if len(result.Warnings) > 0 {
-		hasWarnings = true
-	}
-
-	// Step 3: Check branch status
-	result = g.validateBranchStatus(steps[2])
-	results = append(results, result)
-	if progressCallback != nil {
-		progressCallback(result)
-	}
-	if !result.Success {
-		hasErrors = true
-	}
-	if len(result.Warnings) > 0 {
-		hasWarnings = true
-	}
-
-	// Step 4: Scan for submodules
+	// Step 4: Scan for submodules (sequential - others depend on it)
 	submodules, result := g.scanSubmodules(steps[3])
-	results = append(results, result)
-	if progressCallback != nil {
-		progressCallback(result)
-	}
+	results[3] = result
 	if !result.Success {
 		hasErrors = true
 	}
@@ -310,13 +362,10 @@ func (g *Manager) ValidateRepositoryStatus(progressCallback ProgressCallback) (*
 		hasWarnings = true
 	}
 
-	// Step 5: Validate submodules (if any exist)
+	// Step 5: Validate submodules (sequential - depends on step 4)
 	if len(submodules) > 0 {
 		result = g.validateSubmodules(steps[4], submodules)
-		results = append(results, result)
-		if progressCallback != nil {
-			progressCallback(result)
-		}
+		results[4] = result
 		if !result.Success {
 			hasErrors = true
 		}
@@ -325,24 +374,17 @@ func (g *Manager) ValidateRepositoryStatus(progressCallback ProgressCallback) (*
 		}
 	} else {
 		// Skip submodule validation if no submodules
-		result = ValidationResult{
+		results[4] = ValidationResult{
 			Step:     steps[4],
 			Success:  true,
 			Warnings: nil,
 			Errors:   nil,
 		}
-		results = append(results, result)
-		if progressCallback != nil {
-			progressCallback(result)
-		}
 	}
 
-	// Step 6: Final validation
+	// Step 6: Final validation (can run independently but do it last for logical flow)
 	result = g.performFinalValidation(steps[5])
-	results = append(results, result)
-	if progressCallback != nil {
-		progressCallback(result)
-	}
+	results[5] = result
 	if !result.Success {
 		hasErrors = true
 	}
@@ -581,14 +623,31 @@ func (g *Manager) checkRemoteStatus(branch string) error {
 	fetchResult := cmd.Run()
 	cancel()
 
-	// Log fetch errors for debugging but don't fail validation
+	// Analyze fetch errors for specific issues
 	if fetchResult != nil {
-		// Return a warning about connectivity instead of silently ignoring
 		fetchErrMsg := strings.TrimSpace(fetchErr.String())
+		
+		// Classify error type based on error message patterns
 		if fetchErrMsg != "" {
-			return fmt.Errorf("remote connectivity issue: %v", fetchErrMsg)
+			errLower := strings.ToLower(fetchErrMsg)
+			switch {
+			case strings.Contains(errLower, "authentication failed") || 
+				 strings.Contains(errLower, "permission denied") ||
+				 strings.Contains(errLower, "access denied"):
+				return fmt.Errorf("authentication failed - check your credentials: %v", fetchErrMsg)
+			case strings.Contains(errLower, "network") || 
+				 strings.Contains(errLower, "connection") ||
+				 strings.Contains(errLower, "timeout") ||
+				 strings.Contains(errLower, "unreachable"):
+				return fmt.Errorf("network connectivity issue - check internet connection: %v", fetchErrMsg)
+			case strings.Contains(errLower, "repository not found") ||
+				 strings.Contains(errLower, "does not exist"):
+				return fmt.Errorf("remote repository not found - check remote URL: %v", fetchErrMsg)
+			default:
+				return fmt.Errorf("remote connectivity issue: %v", fetchErrMsg)
+			}
 		}
-		return fmt.Errorf("unable to fetch from remote (network or auth issue)")
+		return fmt.Errorf("unable to fetch from remote - check network connection and credentials")
 	}
 
 	// Check ahead/behind status
