@@ -10,6 +10,8 @@ An interactive Terminal User Interface (TUI) for managing project versions, git 
 - 📝 **Automatic changelog generation** - From conventional commits with emoji categorization
 - 🏷️ **Git tag creation** - Automatic tagging with proper commit messages
 - 🚀 **GitHub release creation** - Integrated with `gh` CLI
+- 🔍 **Git repository validation** - Comprehensive checks for clean working directory, submodules, and branch status
+- 📋 **Submodule tag validation** - Ensures submodules point to release tags before version bumping
 - ⚡ **Fast and responsive** - Built with Go for performance
 
 ## Installation
@@ -92,11 +94,40 @@ CMakeLists.txt
 ## TUI Flow
 
 1. **Welcome Screen** - Project detection and initialization
-2. **Version Selection** - Choose major, minor, or patch bump
-3. **Changelog Preview** - Review generated changes from commits
-4. **Confirmation** - Final review before applying changes
-5. **Progress** - Real-time feedback during operations
-6. **Results** - Success summary
+2. **Repository Validation** - Comprehensive git status and submodule checks
+3. **Version Selection** - Choose major, minor, or patch bump
+4. **Changelog Preview** - Review generated changes from commits
+5. **Confirmation** - Final review before applying changes
+6. **Progress** - Real-time feedback during operations
+7. **Results** - Success summary
+
+## Git Repository Validation
+
+Before allowing version bumps, the tool performs comprehensive repository validation:
+
+### Validation Checks
+
+**✅ Repository Status**
+- Verifies you're in a git repository
+- Checks git connectivity and remote configuration
+
+**✅ Working Directory**
+- **Blocks on**: Uncommitted changes
+- **Warns on**: Untracked files
+
+**✅ Branch Status**  
+- **Warns on**: Detached HEAD state
+- **Warns on**: Branch ahead/behind remote
+
+**✅ Submodule Validation**
+- Detects and validates git submodules
+- **Blocks on**: Submodules with uncommitted changes
+- **Warns on**: Submodules not pointing to release tags
+- **Success**: Submodules pointing to specific version tags
+
+### Validation Results
+
+The validation screen shows detailed results and requires user confirmation before proceeding. You can continue with warnings but errors must be resolved first.
 
 ## Keyboard Navigation
 
@@ -136,5 +167,7 @@ just build-all    # Build for multiple platforms
 ## Requirements
 
 - Git repository (must be run from within a git repo)
+- Clean working directory (no uncommitted changes)
 - At least one supported project file
 - GitHub CLI (`gh`) configured for release creation
+- For repositories with submodules: submodules should point to release tags for best practices
