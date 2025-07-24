@@ -1,5 +1,18 @@
 # Changelog
 
+# 0.1.4 (2025-07-24)
+
+## Features
+- Simplified .bump configuration format to use gitignore-style syntax
+
+## Improvements
+- Updated README documentation to reflect new .bump configuration format
+
+## Other
+- Added bump-tui binary to .gitignore
+- Removed artifact files
+
+
 # 0.1.3 (2025-07-22)
 
 ## Features
