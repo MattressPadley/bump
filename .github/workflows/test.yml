@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Run Tests
+  ci-test:
+    name: CI Tests
     runs-on: ubuntu-latest
     
     steps:
@@ -19,6 +19,11 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
+        
+    - name: Set up Just
+      uses: extractions/setup-just@v1
+      with:
+        just-version: '1.15.0'
         
     - name: Cache Go modules
       uses: actions/cache@v3
@@ -36,15 +41,8 @@ jobs:
     - name: Verify dependencies
       run: go mod verify
       
-    - name: Run go vet
-      run: go vet ./...
-      
-    - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out ./...
-      
-    - name: Check test coverage
-      run: |
-        go tool cover -func=coverage.out
+    - name: Run CI tests
+      run: just ci-test
         
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -67,30 +65,13 @@ jobs:
       with:
         go-version: '1.21'
         
+    - name: Set up Just
+      uses: extractions/setup-just@v1
+      with:
+        just-version: '1.15.0'
+        
     - name: Build application
-      run: go build -v ./...
-      
-    - name: Build binary
-      run: go build -o bump .
+      run: just build
       
     - name: Verify binary
-      run: ./bump --help || true
-
-  lint:
-    name: Lint Code
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Check out code
-      uses: actions/checkout@v4
-      
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
-        
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: latest
-        args: --timeout=5m
+      run: ./build/bump-tui --help || true

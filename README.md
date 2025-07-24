@@ -153,16 +153,61 @@ The changelog generator recognizes these commit types:
 
 ## Development
 
-### Building
+### Building and Testing
 
 ```bash
-just build        # Build binary
-just run          # Run with build info
-just dev          # Run with debug logging
-just test         # Run tests
-just clean        # Clean build artifacts
-just build-all    # Build for multiple platforms
+just build          # Build binary
+just run            # Run with build info
+just dev            # Run with debug logging
+just test           # Run tests
+just test-coverage  # Run tests with coverage and race detection
+just lint           # Run golangci-lint
+just vet            # Run go vet
+just ci-test        # Run full CI-equivalent checks
+just clean          # Clean build artifacts
+just build-all      # Build for multiple platforms
 ```
+
+### Testing
+
+The project includes comprehensive test coverage:
+
+- **89 test cases** covering all validation scenarios
+- **Security tests** for path traversal protection
+- **Integration tests** with real git repositories
+- **Race condition detection** in concurrent operations
+- **Coverage reporting** with detailed metrics
+
+Run the full test suite with:
+
+```bash
+just ci-test        # Complete CI checks (tidy, vet, test-coverage, lint)
+just test-coverage  # Tests with race detection and coverage
+```
+
+### Code Quality
+
+The codebase maintains high quality standards:
+
+- **golangci-lint** with comprehensive linters (errcheck, staticcheck, unused, unparam)
+- **Context-based timeouts** for all external git commands (30s default)
+- **Security validations** preventing path traversal attacks
+- **Comprehensive error handling** with user-friendly messages
+- **Extracted constants** and clean separation of concerns
+
+### CI/CD Pipeline
+
+The project includes a robust GitHub Actions workflow:
+
+- **Automated testing** on pull requests and pushes to main
+- **Consistent tooling** between local development and CI using just commands
+- **Multi-job pipeline** with separate test and build validation
+- **Dependency caching** for faster CI runs
+- **Code coverage reporting** with Codecov integration
+
+The CI pipeline runs:
+1. **Test job**: `just ci-test` (tidy, vet, test-coverage, lint)
+2. **Build job**: `just build` with binary verification
 
 ## Requirements
 
