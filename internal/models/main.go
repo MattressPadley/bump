@@ -135,9 +135,7 @@ type MainModel struct {
 	newVersion            string
 	showHelp              bool
 	claudeEnabled         bool
-	validationSummary     *git.ValidationSummary
-	validationResults     []git.ValidationResult
-	currentValidationStep string
+	validationSummary *git.ValidationSummary
 }
 
 func NewMainModel() MainModel {
@@ -234,9 +232,6 @@ type changelogGeneratedMsg struct {
 	err     error
 }
 
-type validationProgressMsg struct {
-	result git.ValidationResult
-}
 
 type validationCompleteMsg struct {
 	summary *git.ValidationSummary
@@ -905,7 +900,7 @@ func (m MainModel) validationView() string {
 
 		if m.validationSummary.HasErrors {
 			resultsContent = append(resultsContent,
-				summaryStyle.Render(fmt.Sprintf("❌ Found blocking errors - cannot proceed with version bump")))
+				summaryStyle.Render("❌ Found blocking errors - cannot proceed with version bump"))
 		} else if m.validationSummary.HasWarnings {
 			resultsContent = append(resultsContent,
 				summaryStyle.Render(fmt.Sprintf("⚠️  Found %d validation warnings - can proceed with caution",

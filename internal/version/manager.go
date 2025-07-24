@@ -271,9 +271,7 @@ func (m *Manager) extractGoVersion() (*semver.Version, error) {
 
 	tagStr := strings.TrimSpace(string(output))
 	// Remove 'v' prefix if present
-	if strings.HasPrefix(tagStr, "v") {
-		tagStr = tagStr[1:]
-	}
+	tagStr = strings.TrimPrefix(tagStr, "v")
 
 	return semver.NewVersion(tagStr)
 }
@@ -409,18 +407,18 @@ func (m *Manager) updateVersionInFile(projectFile ProjectFile, newVersion string
 	case Go:
 		return m.updateGoVersion(newVersion)
 	case Rust:
-		updatedContent, err = m.updateCargoVersion(string(content), newVersion)
+		updatedContent = m.updateCargoVersion(string(content), newVersion)
 	case Python:
-		updatedContent, err = m.updatePyprojectVersion(string(content), newVersion)
+		updatedContent = m.updatePyprojectVersion(string(content), newVersion)
 	case Cpp:
 		updatedContent, err = m.updateCMakeVersion(string(content), newVersion)
 	case PlatformIO:
 		if strings.HasSuffix(projectFile.Path, ".ini") {
-			updatedContent, err = m.updatePlatformIOIniVersion(string(content), newVersion)
+			updatedContent = m.updatePlatformIOIniVersion(string(content), newVersion)
 		} else if strings.HasSuffix(projectFile.Path, ".json") {
 			updatedContent, err = m.updateLibraryJsonVersion(string(content), newVersion)
 		} else if strings.HasSuffix(projectFile.Path, ".properties") {
-			updatedContent, err = m.updateLibraryPropertiesVersion(string(content), newVersion)
+			updatedContent = m.updateLibraryPropertiesVersion(string(content), newVersion)
 		}
 	default:
 		return fmt.Errorf("unsupported project type: %s", projectFile.Type)
@@ -440,14 +438,14 @@ func (m *Manager) updateGoVersion(newVersion string) error {
 	return nil
 }
 
-func (m *Manager) updateCargoVersion(content, newVersion string) (string, error) {
+func (m *Manager) updateCargoVersion(content, newVersion string) string {
 	re := regexp.MustCompile(`(\[package\][\s\S]*?version\s*=\s*")([^"]+)(")`)
-	return re.ReplaceAllString(content, "${1}"+newVersion+"${3}"), nil
+	return re.ReplaceAllString(content, "${1}"+newVersion+"${3}")
 }
 
-func (m *Manager) updatePyprojectVersion(content, newVersion string) (string, error) {
+func (m *Manager) updatePyprojectVersion(content, newVersion string) string {
 	re := regexp.MustCompile(`(\[tool\.poetry\][\s\S]*?version\s*=\s*")([^"]+)(")`)
-	return re.ReplaceAllString(content, "${1}"+newVersion+"${3}"), nil
+	return re.ReplaceAllString(content, "${1}"+newVersion+"${3}")
 }
 
 func (m *Manager) updateCMakeVersion(content, newVersion string) (string, error) {
@@ -467,9 +465,9 @@ func (m *Manager) updateCMakeVersion(content, newVersion string) (string, error)
 	return content, nil
 }
 
-func (m *Manager) updatePlatformIOIniVersion(content, newVersion string) (string, error) {
+func (m *Manager) updatePlatformIOIniVersion(content, newVersion string) string {
 	re := regexp.MustCompile(`(version\s*=\s*)([^\r\n]+)`)
-	return re.ReplaceAllString(content, "${1}\""+newVersion+"\""), nil
+	return re.ReplaceAllString(content, "${1}\""+newVersion+"\"")
 }
 
 func (m *Manager) updateLibraryJsonVersion(content, newVersion string) (string, error) {
@@ -489,7 +487,7 @@ func (m *Manager) updateLibraryJsonVersion(content, newVersion string) (string, 
 	return string(updatedBytes), nil
 }
 
-func (m *Manager) updateLibraryPropertiesVersion(content, newVersion string) (string, error) {
+func (m *Manager) updateLibraryPropertiesVersion(content, newVersion string) string {
 	re := regexp.MustCompile(`(version\s*=\s*)([^\r\n]+)`)
-	return re.ReplaceAllString(content, "${1}"+newVersion), nil
+	return re.ReplaceAllString(content, "${1}"+newVersion)
 }

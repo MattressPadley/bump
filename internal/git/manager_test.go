@@ -93,14 +93,14 @@ func TestValidateRepositoryStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary directory for test repository
 			repoDir := createTempDir(t)
-			defer os.RemoveAll(repoDir)
+			defer func() { _ = os.RemoveAll(repoDir) }()
 
 			// Change to the repo directory
 			originalDir, err := os.Getwd()
 			if err != nil {
 				t.Fatalf("Failed to get current directory: %v", err)
 			}
-			defer os.Chdir(originalDir)
+			defer func() { _ = os.Chdir(originalDir) }()
 
 			if err := os.Chdir(repoDir); err != nil {
 				t.Fatalf("Failed to change to repo directory: %v", err)
@@ -202,13 +202,13 @@ func TestGetSubmodules(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a temporary directory with fake git setup
 			repoDir := createTempDir(t)
-			defer os.RemoveAll(repoDir)
+			defer func() { _ = os.RemoveAll(repoDir) }()
 
 			originalDir, err := os.Getwd()
 			if err != nil {
 				t.Fatalf("Failed to get current directory: %v", err)
 			}
-			defer os.Chdir(originalDir)
+			defer func() { _ = os.Chdir(originalDir) }()
 
 			if err := os.Chdir(repoDir); err != nil {
 				t.Fatalf("Failed to change to repo directory: %v", err)
@@ -313,13 +313,13 @@ func TestHasUncommittedChanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repoDir := createTempDir(t)
-			defer os.RemoveAll(repoDir)
+			defer func() { _ = os.RemoveAll(repoDir) }()
 
 			originalDir, err := os.Getwd()
 			if err != nil {
 				t.Fatalf("Failed to get current directory: %v", err)
 			}
-			defer os.Chdir(originalDir)
+			defer func() { _ = os.Chdir(originalDir) }()
 
 			if err := os.Chdir(repoDir); err != nil {
 				t.Fatalf("Failed to change to repo directory: %v", err)
@@ -345,13 +345,13 @@ func TestHasUncommittedChanges(t *testing.T) {
 
 func TestGetUntrackedFiles(t *testing.T) {
 	repoDir := createTempDir(t)
-	defer os.RemoveAll(repoDir)
+	defer func() { _ = os.RemoveAll(repoDir) }()
 
 	originalDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 
 	if err := os.Chdir(repoDir); err != nil {
 		t.Fatalf("Failed to change to repo directory: %v", err)
@@ -583,13 +583,13 @@ func TestIsGitRepository(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testDir := createTempDir(t)
-			defer os.RemoveAll(testDir)
+			defer func() { _ = os.RemoveAll(testDir) }()
 
 			originalDir, err := os.Getwd()
 			if err != nil {
 				t.Fatalf("Failed to get current directory: %v", err)
 			}
-			defer os.Chdir(originalDir)
+			defer func() { _ = os.Chdir(originalDir) }()
 
 			if err := os.Chdir(testDir); err != nil {
 				t.Fatalf("Failed to change to test directory: %v", err)

@@ -52,30 +52,6 @@ func (g *Manager) validateSubmodulePath(path string) error {
 	return nil
 }
 
-// runGitCommandWithTimeout runs a git command with a timeout context
-func (g *Manager) runGitCommandWithTimeout(args ...string) (*exec.Cmd, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "git", args...)
-	return cmd, nil
-}
-
-// runGitCommandWithOutput runs a git command with timeout and returns stdout
-func (g *Manager) runGitCommandWithOutput(args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "git", args...)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s failed: %v", strings.Join(args, " "), err)
-	}
-
-	return strings.TrimSpace(stdout.String()), nil
-}
 
 func (g *Manager) IsGitRepository() error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitCommandTimeout)
@@ -843,7 +819,7 @@ func (g *Manager) checkGitConnectivity() error {
 // isHexString checks if a string contains only hexadecimal characters
 func isHexString(s string) bool {
 	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return false
 		}
 	}
