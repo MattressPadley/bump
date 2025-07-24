@@ -11,10 +11,10 @@ Bump is an interactive Terminal User Interface (TUI) tool for semantic version m
 The application follows a modular architecture with these key components:
 
 - **main.go**: Entry point that initializes the Bubble Tea TUI
-- **internal/models/main.go**: Core TUI model implementing the Bubble Tea pattern with session states (welcome → version selection → changelog generation → preview → confirmation → progress → results)
+- **internal/models/main.go**: Core TUI model implementing the Bubble Tea pattern with session states (welcome → validation → version selection → changelog generation → preview → confirmation → progress → results)
 - **internal/version/manager.go**: Handles version detection, parsing, and updating across multiple project types (Go, Rust, Python, C++, PlatformIO)
 - **internal/changelog/manager.go**: Generates changelogs from conventional commits with Claude AI integration and regex fallback
-- **internal/git/manager.go**: Git operations (commits, tags, pushing)
+- **internal/git/manager.go**: Git operations (commits, tags, pushing) and repository validation (working directory, submodules, branch status)
 - **internal/config/bump_config.go**: Configuration file parsing for `.bump` TOML files
 
 ### Key Architecture Patterns
@@ -85,16 +85,34 @@ The changelog system has two modes:
 
 Conventional commit types are mapped to emojis (feat→✨, fix→🐛, docs→📚, etc.).
 
+## Git Repository Validation System
+
+Before allowing version operations, the tool performs comprehensive validation:
+
+### Validation Steps
+1. **Repository Status**: Verifies git repository and connectivity
+2. **Working Directory**: Checks for uncommitted changes (blocks) and untracked files (warns)  
+3. **Branch Status**: Validates current branch state and remote synchronization
+4. **Submodule Detection**: Scans for git submodules using .gitmodules
+5. **Submodule Validation**: Checks initialization, tag pointing, and clean status
+6. **Final Checks**: Ensures git connectivity and configuration
+
+### Validation Rules
+- **Blocking Errors**: Uncommitted changes, uninitialized submodules, submodule uncommitted changes
+- **Warnings**: Untracked files, submodules not pointing to tags, branch sync issues
+- **Success Cases**: Clean repository, all submodules pointing to release tags
+
 ## TUI Flow Implementation
 
 The application implements a linear state machine:
 1. **welcomeView**: Project detection and initialization
-2. **versionSelectView**: Major/minor/patch selection with current version display
-3. **changelogGeneratingView**: Async changelog generation with spinner
-4. **changelogPreviewView**: Scrollable changelog review
-5. **confirmationView**: Final confirmation with action summary
-6. **progressView**: Version update operations with spinner
-7. **resultsView**: Success summary and next steps
+2. **validationView**: Git repository validation with detailed results display
+3. **versionSelectView**: Major/minor/patch selection with current version display
+4. **changelogGeneratingView**: Async changelog generation with spinner
+5. **changelogPreviewView**: Scrollable changelog review
+6. **confirmationView**: Final confirmation with action summary
+7. **progressView**: Version update operations with spinner
+8. **resultsView**: Success summary and next steps
 
 ## Testing Notes
 

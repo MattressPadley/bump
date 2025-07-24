@@ -57,7 +57,11 @@ func main() {
 			fmt.Println("fatal:", err)
 			os.Exit(1)
 		}
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil {
+				fmt.Printf("Warning: failed to close debug log: %v\n", err)
+			}
+		}()
 	}
 
 	// Start the TUI

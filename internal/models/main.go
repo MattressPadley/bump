@@ -20,6 +20,7 @@ type sessionState int
 
 const (
 	welcomeView sessionState = iota
+	validationView
 	versionSelectView
 	changelogGeneratingView
 	changelogPreviewView
@@ -129,11 +130,12 @@ type MainModel struct {
 	spinner       spinner.Model
 
 	// State data
-	selectedBump     bumpType
-	generatedChanges string
-	newVersion       string
-	showHelp         bool
-	claudeEnabled    bool
+	selectedBump          bumpType
+	generatedChanges      string
+	newVersion            string
+	showHelp              bool
+	claudeEnabled         bool
+	validationSummary *git.ValidationSummary
 }
 
 func NewMainModel() MainModel {
@@ -201,6 +203,8 @@ func NewMainModel() MainModel {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#8aadf4"))
 
+	// Progress bar removed - using spinner for validation since it's instantaneous
+
 	// Check if Claude is available
 	claudeAvailable := changelogManager.IsClaudeAvailable()
 
@@ -225,6 +229,12 @@ type initDoneMsg struct {
 
 type changelogGeneratedMsg struct {
 	changes string
+	err     error
+}
+
+
+type validationCompleteMsg struct {
+	summary *git.ValidationSummary
 	err     error
 }
 
@@ -260,6 +270,17 @@ func (m MainModel) generateChangelog() tea.Msg {
 	}
 }
 
+func (m MainModel) validateRepository() tea.Cmd {
+	return func() tea.Msg {
+		summary, err := m.gitManager.ValidateRepositoryStatus()
+		if err != nil {
+			return validationCompleteMsg{err: err}
+		}
+
+		return validationCompleteMsg{summary: summary}
+	}
+}
+
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -280,8 +301,23 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Project initialized successfully, move to version selection
-		m.state = versionSelectView
+		// Project initialized successfully, move to validation
+		m.state = validationView
+		return m, tea.Batch(
+			m.validateRepository(),
+			m.spinner.Tick,
+		)
+
+	case validationCompleteMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+
+		m.validationSummary = msg.summary
+
+		// Always stay on validation view to show results
+		// User must press enter to continue or see errors
 		return m, nil
 
 	case changelogGeneratedMsg:
@@ -296,7 +332,7 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case spinner.TickMsg:
-		if m.state == changelogGeneratingView || m.state == progressView {
+		if m.state == validationView || m.state == changelogGeneratingView || m.state == progressView {
 			var cmd tea.Cmd
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd
@@ -320,6 +356,8 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Handle state-specific key events
 		switch m.state {
+		case validationView:
+			return m.updateValidation(msg)
 		case versionSelectView:
 			return m.updateVersionSelect(msg)
 		case changelogGeneratingView:
@@ -341,6 +379,20 @@ func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	return m, nil
+}
+
+func (m MainModel) updateValidation(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Enter):
+		// If validation completed and can proceed, move to version selection
+		if m.validationSummary != nil && m.validationSummary.CanProceed {
+			m.state = versionSelectView
+			return m, nil
+		}
+		// If validation failed, stay on validation view
+		return m, nil
+	}
 	return m, nil
 }
 
@@ -462,6 +514,8 @@ func (m MainModel) View() string {
 	switch m.state {
 	case welcomeView:
 		return m.welcomeView()
+	case validationView:
+		return m.validationView()
 	case versionSelectView:
 		return m.versionSelectView()
 	case changelogGeneratingView:
@@ -750,6 +804,150 @@ func (m MainModel) projectFilesView() string {
 	}
 
 	return strings.Join(files, "\n")
+}
+
+func (m MainModel) validationView() string {
+	header := m.headerView("Repository Validation")
+
+	// Current step or completion status
+	var statusText string
+	var statusStyle lipgloss.Style
+
+	if m.validationSummary == nil {
+		// Still validating - show spinner
+		statusText = fmt.Sprintf("%s Validating repository status...", m.spinner.View())
+		statusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#8aadf4")).
+			Bold(true)
+	} else if !m.validationSummary.CanProceed {
+		// Validation failed
+		statusText = "❌ Validation Failed - Repository is not ready for version bump"
+		statusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ed8796")).
+			Bold(true)
+	} else if m.validationSummary.HasWarnings {
+		// Validation passed with warnings
+		statusText = "⚠️  Validation Complete - Warnings found but can proceed"
+		statusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#f5a97f")).
+			Bold(true)
+	} else {
+		// Validation passed completely
+		statusText = "✅ Validation Complete - Repository is ready"
+		statusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#a6da95")).
+			Bold(true)
+	}
+
+	status := statusStyle.Render(statusText)
+
+	// Results summary - ALWAYS show detailed results when available
+	var resultsContent []string
+	if m.validationSummary != nil {
+		resultsContent = append(resultsContent,
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#8aadf4")).
+				Bold(true).
+				Render("📋 Validation Results:"))
+		resultsContent = append(resultsContent, "")
+
+		for _, result := range m.validationSummary.Results {
+			// Step name and status
+			stepIcon := "✅"
+			if !result.Success {
+				stepIcon = "❌"
+			} else if len(result.Warnings) > 0 {
+				stepIcon = "⚠️ "
+			}
+
+			stepLine := fmt.Sprintf("%s %s", stepIcon, result.Step.Description)
+			resultsContent = append(resultsContent, stepLine)
+
+			// Add errors
+			for _, err := range result.Errors {
+				errorLine := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#ed8796")).
+					Render(fmt.Sprintf("   • %s", err))
+				resultsContent = append(resultsContent, errorLine)
+			}
+
+			// Add warnings
+			for _, warning := range result.Warnings {
+				warningLine := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#f5a97f")).
+					Render(fmt.Sprintf("   • %s", warning))
+				resultsContent = append(resultsContent, warningLine)
+			}
+
+			// For submodule validation step, add success info when no warnings
+			if result.Step.Name == "submodules_status" && len(result.Warnings) == 0 && len(result.Errors) == 0 && result.Success {
+				successLine := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("#a6da95")).
+					Render("   • All submodules point to release tags")
+				resultsContent = append(resultsContent, successLine)
+			}
+		}
+
+		// Add summary stats
+		resultsContent = append(resultsContent, "")
+		summaryStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6e738d"))
+
+		if m.validationSummary.HasErrors {
+			resultsContent = append(resultsContent,
+				summaryStyle.Render("❌ Found blocking errors - cannot proceed with version bump"))
+		} else if m.validationSummary.HasWarnings {
+			resultsContent = append(resultsContent,
+				summaryStyle.Render(fmt.Sprintf("⚠️  Found %d validation warnings - can proceed with caution",
+					m.countWarnings())))
+		} else {
+			resultsContent = append(resultsContent,
+				summaryStyle.Render("✅ All validation checks passed - repository is ready"))
+		}
+	}
+
+	results := strings.Join(resultsContent, "\n")
+
+	// Footer instructions
+	var footerText string
+	if m.validationSummary == nil {
+		footerText = "q: quit"
+	} else if m.validationSummary.CanProceed {
+		footerText = "enter: continue to version selection • q: quit"
+	} else {
+		footerText = "Fix errors and restart • q: quit"
+	}
+
+	footer := m.footerView(footerText)
+
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		header,
+		"",
+		status,
+		"",
+		"",
+		results,
+		"",
+		"",
+		footer,
+	)
+
+	return lipgloss.Place(
+		m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		content,
+	)
+}
+
+func (m MainModel) countWarnings() int {
+	if m.validationSummary == nil {
+		return 0
+	}
+	count := 0
+	for _, result := range m.validationSummary.Results {
+		count += len(result.Warnings)
+	}
+	return count
 }
 
 func (m MainModel) welcomeView() string {

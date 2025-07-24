@@ -25,6 +25,26 @@ clean:
 test:
     go test -v ./...
 
+# Run tests with coverage
+test-coverage:
+    go test -v -race -coverprofile=coverage.out ./...
+    go tool cover -func=coverage.out
+
+# Run linting
+lint:
+    golangci-lint run --timeout=5m
+
+# Run go vet
+vet:
+    go vet ./...
+
+# Run full CI-equivalent checks
+ci-test:
+    just tidy
+    just vet  
+    just test-coverage
+    just lint
+
 # Tidy go modules
 tidy:
     go mod tidy
@@ -36,13 +56,17 @@ install: build
 # Show help
 help:
     @echo "Available recipes:"
-    @echo "  build     - Build the binary"
-    @echo "  run       - Run the application"  
-    @echo "  clean     - Clean build artifacts"
-    @echo "  test      - Run tests"
-    @echo "  tidy      - Tidy go modules"
-    @echo "  install   - Install binary to GOPATH/bin"
-    @echo "  help      - Show this help"
+    @echo "  build         - Build the binary"
+    @echo "  run           - Run the application"  
+    @echo "  clean         - Clean build artifacts"
+    @echo "  test          - Run tests"
+    @echo "  test-coverage - Run tests with coverage report"
+    @echo "  lint          - Run golangci-lint"
+    @echo "  vet           - Run go vet"
+    @echo "  ci-test       - Run full CI-equivalent checks"
+    @echo "  tidy          - Tidy go modules"
+    @echo "  install       - Install binary to GOPATH/bin"
+    @echo "  help          - Show this help"
 
 # Development recipes
 dev: tidy
