@@ -33,7 +33,12 @@ func LoadBumpConfig(projectRoot string) (*BumpConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open .bump config: %v", err)
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		if err := file.Close(); err != nil {
+			// Log error but don't fail the operation
+			fmt.Printf("Warning: failed to close config file: %v\n", err)
+		}
+	}()
 
 	var config BumpConfig
 	scanner := bufio.NewScanner(file)
