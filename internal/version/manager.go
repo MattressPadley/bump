@@ -74,7 +74,7 @@ func (m *Manager) detectVersionFilesFromConfig(projectRoot string) error {
 		projectFile := ProjectFile{
 			Path:        fullPath,
 			Type:        projectType,
-			Description: configFile.Description,
+			Description: m.getDefaultDescription(projectType),
 		}
 		
 		// Extract version from this file
@@ -155,6 +155,24 @@ func (m *Manager) detectProjectTypeFromPath(filePath string) ProjectType {
 		return PlatformIO
 	default:
 		return "" // Unknown type
+	}
+}
+
+// getDefaultDescription returns a default description for a project type
+func (m *Manager) getDefaultDescription(projectType ProjectType) string {
+	switch projectType {
+	case Go:
+		return "Go module file"
+	case Rust:
+		return "Rust package manifest"
+	case Python:
+		return "Python project configuration"
+	case Cpp:
+		return "CMake build configuration"
+	case PlatformIO:
+		return "PlatformIO project configuration"
+	default:
+		return "Project configuration file"
 	}
 }
 

@@ -1,25 +1,23 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/pelletier/go-toml/v2"
+	"strings"
 )
 
 // BumpConfig represents the configuration from a .bump file
 type BumpConfig struct {
 	// Version files to manage
-	Files []VersionFile `toml:"files"`
+	Files []VersionFile
 }
 
 // VersionFile represents a single version file configuration
 type VersionFile struct {
 	// Path to the file relative to the repository root
-	Path string `toml:"path"`
-	// Optional description of this file
-	Description string `toml:"description,omitempty"`
+	Path string
 }
 
 // LoadBumpConfig loads the .bump configuration file from the project root
@@ -31,14 +29,27 @@ func LoadBumpConfig(projectRoot string) (*BumpConfig, error) {
 		return nil, nil // No config file, return nil (not an error)
 	}
 	
-	content, err := os.ReadFile(configPath)
+	file, err := os.Open(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read .bump config: %v", err)
+		return nil, fmt.Errorf("failed to open .bump config: %v", err)
 	}
+	defer file.Close()
 	
 	var config BumpConfig
-	err = toml.Unmarshal(content, &config)
-	if err != nil {
+	scanner := bufio.NewScanner(file)
+	
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		
+		config.Files = append(config.Files, VersionFile{Path: line})
+	}
+	
+	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("failed to parse .bump config: %v", err)
 	}
 	

@@ -64,16 +64,15 @@ The version manager detects and updates these project files:
 ## Configuration System
 
 ### .bump Configuration Files
-Projects can define a `.bump` TOML file to specify multiple version files:
+Projects can define a `.bump` file to specify multiple version files. The format is simple, like a `.gitignore` file - one file path per line:
 
-```toml
-[[files]]
-path = "Cargo.toml"
-description = "Rust package manifest"
+```
+# Version files to manage
+Cargo.toml
+pyproject.toml
+CMakeLists.txt
 
-[[files]]  
-path = "pyproject.toml"
-description = "Python project configuration"
+# Comments and empty lines are ignored
 ```
 
 When `.bump` exists, it overrides automatic detection and all specified files are updated synchronously.
