@@ -26,10 +26,9 @@ jobs:
         just-version: '1.15.0'
 
     - name: Set up golangci-lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v8
       with:
-        version: v1.61.0
-        skip-cache: false
+        version: v2.1
         
     - name: Cache Go modules
       uses: actions/cache@v3
